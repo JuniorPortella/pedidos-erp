@@ -16,12 +16,14 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - hash protegido para consultas de dados criptografados;
 - migrations versionadas para as tabelas de usuários e pedidos;
 - entidade, perfis e validação do cadastro de usuários;
+- persistência de usuários com PDO e proteção dos dados sensíveis;
+- service de usuários com validação de duplicidade e hash de senha;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar a persistência dos usuários, autenticação, logs,
-integração da criptografia aos repositories e frontend.
+Ainda vou implementar atualização e exclusão de usuários, autenticação, logs,
+endpoints HTTP, pedidos e frontend.
 
 ## Estrutura
 
@@ -42,10 +44,15 @@ PedidosFull/
 |   |   |   |-- User.php                   # Entidade de usuário
 |   |   |   `-- UserProfile.php            # Perfis de acesso
 |   |   |-- Exception/ValidationException.php
+|   |   |-- Repository/
+|   |   |   |-- UserRepository.php         # Contrato de persistência
+|   |   |   `-- PdoUserRepository.php      # Implementação com PDO
 |   |   |-- Security/
 |   |   |   |-- DataCipher.php             # Criptografia autenticada
 |   |   |   `-- LookupHasher.php            # Hash protegido para consultas
-|   |   `-- Service/CreateUserInputValidator.php
+|   |   `-- Service/
+|   |       |-- CreateUserInputValidator.php
+|   |       `-- UserService.php             # Regras de usuários
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
 |   |   `-- Integration/                  # Testes com serviços reais
@@ -174,13 +181,14 @@ docker compose exec api composer test
 ```
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
-criptografia autenticada, hashes de consulta, entidade e validação de usuários,
-além de um teste de integração que cria uma conexão PDO real com o MySQL.
+criptografia autenticada, hashes de consulta, entidade, validação e service de
+usuários. Os testes de integração validam a conexão PDO e o repository com um
+MySQL real.
 
 Resultado atual:
 
 ```text
-OK (35 tests, 86 assertions)
+OK (38 tests, 98 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -233,8 +241,7 @@ da autenticação.
 
 Meus próximos passos são:
 
-- integrar a criptografia aos dados sensíveis no repository de usuários;
-- implementar persistência, consulta e exclusão lógica de usuários;
+- implementar atualização e exclusão lógica de usuários;
 - implementar cadastro, login e autenticação;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
