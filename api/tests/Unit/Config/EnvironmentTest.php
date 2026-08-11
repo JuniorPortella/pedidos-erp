@@ -78,4 +78,55 @@ final class EnvironmentTest extends TestCase
 
         Environment::getBoolean(self::VARIABLE);
     }
+
+    #[DataProvider('positiveIntegerValues')]
+    public function testConvertsPositiveInteger(
+        string $rawValue,
+        int $expected
+    ): void {
+        putenv(self::VARIABLE . '=' . $rawValue);
+
+        self::assertSame(
+            $expected,
+            Environment::getPositiveInteger(
+                self::VARIABLE
+            )
+        );
+    }
+
+    public static function positiveIntegerValues(): array
+    {
+        return [
+            'one' => ['1', 1],
+            'access ttl' => ['900', 900],
+            'refresh ttl' => ['86400', 86400],
+        ];
+    }
+
+    #[DataProvider('invalidPositiveIntegerValues')]
+    public function testRejectsInvalidPositiveInteger(
+        string $rawValue
+    ): void {
+        putenv(self::VARIABLE . '=' . $rawValue);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Variavel de ambiente deve ser um inteiro positivo: '
+            . self::VARIABLE
+        );
+
+        Environment::getPositiveInteger(
+            self::VARIABLE
+        );
+    }
+
+    public static function invalidPositiveIntegerValues(): array
+    {
+        return [
+            'zero' => ['0'],
+            'negative' => ['-1'],
+            'decimal' => ['1.5'],
+            'text' => ['texto'],
+        ];
+    }
 }

@@ -49,4 +49,30 @@ final class Environment
 
         return $value;
     }
+    public static function getPositiveInteger(
+        string $name
+    ): int {
+        $rawValue = self::getRequired($name);
+
+        $value = filter_var(
+            $rawValue,
+            FILTER_VALIDATE_INT,
+            [
+                'options' => [
+                    'min_range' => 1,
+                ],
+            ]
+        );
+
+        if ($value === false) {
+            throw new RuntimeException(
+                sprintf(
+                    'Variavel de ambiente deve ser um inteiro positivo: %s',
+                    $name
+                )
+            );
+        }
+
+        return $value;
+    }
 }

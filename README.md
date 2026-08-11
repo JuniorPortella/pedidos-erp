@@ -19,6 +19,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - persistência de usuários com PDO e proteção dos dados sensíveis;
 - service de usuários com validação de duplicidade e hash de senha;
 - backend de autenticação com verificação isolada de credenciais;
+- configuração de autenticação validada para desenvolvimento e produção;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -36,7 +37,9 @@ PedidosFull/
 |   |-- docker/apache/                    # VirtualHost do Apache
 |   |-- public/index.php                  # Ponto de entrada da API
 |   |-- src/
-|   |   |-- Config/Environment.php        # Leitura e validação do ambiente
+|   |   |-- Config/
+|   |   |   |-- AuthConfig.php             # Configuração segura da autenticação
+|   |   |   `-- Environment.php            # Leitura e validação do ambiente
 |   |   |-- Database/
 |   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
 |   |   |   `-- MigrationRunner.php       # Execução das migrations
@@ -125,6 +128,11 @@ A primeira chave protege a criptografia reversível dos dados. A segunda protege
 os hashes determinísticos usados nas consultas. As chaves não devem ser iguais
 nem enviadas ao repositório.
 
+Gere mais duas chaves com o mesmo comando para `JWT_ACCESS_SECRET` e
+`JWT_REFRESH_SECRET`. O access token possui duração de 15 minutos e o refresh
+token de um dia. As chaves dos tokens também devem ser diferentes entre si e
+das chaves usadas para proteger os dados.
+
 Suba a API e o MySQL:
 
 ```bash
@@ -191,7 +199,7 @@ autenticação com um MySQL real.
 Resultado atual:
 
 ```text
-OK (41 tests, 104 assertions)
+OK (59 tests, 144 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -236,16 +244,18 @@ Essa criptografia será uma das medidas de segurança do projeto, junto com
 controle de acesso por perfil, exclusão lógica de usuários e logs sem
 informações sensíveis.
 
-Para a autenticação, escolhi armazenar o JWT em cookie `HttpOnly`. Vou definir
-`Secure`, `SameSite`, CORS e a proteção contra CSRF junto com a implementação
-da autenticação.
+Para a autenticação, escolhi separar access e refresh tokens e armazená-los em
+cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
+CSRF ativo em produção. Vou implementar rotação de refresh tokens, blacklist no
+logout, validação de `SameSite` e CORS restrito à origem do frontend.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar cadastro, login e autenticação;
+- implementar emissão, rotação e blacklist dos tokens JWT;
+- implementar cadastro, login e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
 - ampliar os testes unitários e criar testes de integração dos endpoints;
