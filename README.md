@@ -12,12 +12,13 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - MySQL isolado na rede do Docker;
 - variáveis de ambiente obrigatórias e booleanas validadas;
 - conexão PDO centralizada e validada com o MySQL;
+- criptografia autenticada implementada e testada com Libsodium;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
 Ainda vou implementar as migrations, regras de negócio, autenticação, logs,
-criptografia de dados sensíveis e frontend.
+integração da criptografia aos usuários e frontend.
 
 ## Estrutura
 
@@ -28,7 +29,8 @@ PedidosFull/
 |   |-- public/index.php                  # Ponto de entrada da API
 |   |-- src/
 |   |   |-- Config/Environment.php        # Leitura e validação do ambiente
-|   |   `-- Database/ConnectionFactory.php # Criação da conexão PDO
+|   |   |-- Database/ConnectionFactory.php # Criação da conexão PDO
+|   |   `-- Security/DataCipher.php        # Criptografia autenticada
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
 |   |   `-- Integration/                  # Testes com serviços reais
@@ -134,13 +136,14 @@ Com a API e o MySQL em execução, rodo:
 docker compose exec api composer test
 ```
 
-Atualmente, a suíte possui testes unitários para a validação das variáveis de
-ambiente e um teste de integração que cria uma conexão PDO real com o MySQL.
+Atualmente, a suíte possui testes unitários para variáveis de ambiente e
+criptografia autenticada, além de um teste de integração que cria uma conexão
+PDO real com o MySQL.
 
 Resultado atual:
 
 ```text
-OK (8 tests, 11 assertions)
+OK (15 tests, 25 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -168,8 +171,8 @@ e verificadas com `password_verify()`. Senhas não serão criptografadas de form
 reversível.
 
 Para os dados pessoais que realmente precisarem de criptografia reversível,
-utilizarei Libsodium com XChaCha20-Poly1305. A chave ficará somente nas
-variáveis de ambiente e nunca será armazenada no banco ou enviada ao
+implementei um serviço com Libsodium e XChaCha20-Poly1305. A chave fica somente
+nas variáveis de ambiente e nunca será armazenada no banco ou enviada ao
 repositório.
 
 Campos criptografados que precisarem de busca, como o e-mail, terão um índice
@@ -188,7 +191,7 @@ da autenticação.
 
 Meus próximos passos são:
 
-- implementar e testar a criptografia de dados sensíveis com Libsodium;
+- integrar a criptografia aos dados sensíveis de usuários;
 - criar o schema e as migrations do banco;
 - implementar usuários, perfis e exclusão lógica;
 - implementar cadastro, login e autenticação;

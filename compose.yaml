@@ -38,6 +38,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV}
       APP_DEBUG: ${APP_DEBUG}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY}
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_DATABASE: ${MYSQL_DATABASE}

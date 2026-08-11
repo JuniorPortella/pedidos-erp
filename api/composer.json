@@ -8,6 +8,7 @@
         "ext-json": "*",
         "ext-pdo": "*",
         "ext-pdo_mysql": "*",
+        "ext-sodium": "*",
         "firebase/php-jwt": "^7.1",
         "monolog/monolog": "^3.10"
     },
