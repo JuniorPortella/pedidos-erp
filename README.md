@@ -43,11 +43,10 @@ Estas são as versões que validei no ambiente Docker atual:
 - PDO MySQL
 - Docker Compose
 
-Nas próximas etapas da API, vou adicionar:
+Dependências instaladas na API:
 
 - PHPUnit 11.5
-- Firebase PHP-JWT 6.11
-- PHP dotenv 5.6
+- Firebase PHP-JWT 7.1
 - Monolog 3.10
 
 Vou criar o frontend com Node.js 22, React 18.3.1, React Router 7, TypeScript e
