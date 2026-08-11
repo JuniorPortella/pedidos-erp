@@ -92,14 +92,18 @@ openssl rand -hex 24
 Execute o comando duas vezes e coloque os resultados no `.env`. Esse arquivo é
 ignorado pelo Git e não deve ser enviado ao repositório.
 
-Gere também a chave de 32 bytes usada na criptografia autenticada:
+Gere separadamente as duas chaves de 32 bytes usadas na proteção dos dados:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Coloque o resultado em `DATA_ENCRYPTION_KEY` no `.env`. A perda dessa chave
-impede a recuperação dos dados criptografados.
+Execute o comando duas vezes. Coloque um resultado em `DATA_ENCRYPTION_KEY` e o
+outro em `DATA_LOOKUP_KEY` no `.env`.
+
+A primeira chave protege a criptografia reversível dos dados. A segunda protege
+os hashes determinísticos usados nas consultas. As chaves não devem ser iguais
+nem enviadas ao repositório.
 
 Suba a API e o MySQL:
 
@@ -159,14 +163,14 @@ Com a API e o MySQL em execução, rodo:
 docker compose exec api composer test
 ```
 
-Atualmente, a suíte possui testes unitários para variáveis de ambiente e
-criptografia autenticada, além de um teste de integração que cria uma conexão
-PDO real com o MySQL.
+Atualmente, a suíte possui testes unitários para variáveis de ambiente,
+criptografia autenticada e hashes de consulta, além de um teste de integração
+que cria uma conexão PDO real com o MySQL.
 
 Resultado atual:
 
 ```text
-OK (15 tests, 25 assertions)
+OK (21 tests, 35 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -202,9 +206,10 @@ implementei um serviço com Libsodium e XChaCha20-Poly1305. A chave fica somente
 nas variáveis de ambiente e nunca será armazenada no banco ou enviada ao
 repositório.
 
-Campos criptografados que precisarem de busca, como o e-mail, terão um índice
-de consulta separado. Isso permitirá localizar o usuário sem utilizar o texto
-original diretamente na pesquisa do banco.
+Campos criptografados que precisarem de busca, como o e-mail, terão um hash de
+consulta separado, gerado com HMAC-SHA256 e uma chave exclusiva. Isso permite
+validar a unicidade e localizar registros sem pesquisar pelo texto original ou
+pela criptografia aleatória.
 
 Essa criptografia será uma das medidas de segurança do projeto, junto com
 controle de acesso por perfil, exclusão lógica de usuários e logs sem
