@@ -21,6 +21,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - backend de autenticação com verificação isolada de credenciais;
 - configuração de autenticação validada para desenvolvimento e produção;
 - emissão e validação de access e refresh tokens JWT;
+- rotação transacional de refresh tokens com detecção de reutilização;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -54,10 +55,14 @@ PedidosFull/
 |   |   |   `-- UserProfile.php            # Perfis de acesso
 |   |   |-- Exception/
 |   |   |   |-- InvalidTokenException.php
+|   |   |   |-- RefreshTokenNotActiveException.php
+|   |   |   |-- RefreshTokenReuseException.php
 |   |   |   `-- ValidationException.php
 |   |   |-- Repository/
 |   |   |   |-- AuthenticationRepository.php
 |   |   |   |-- PdoAuthenticationRepository.php
+|   |   |   |-- PdoRefreshTokenRepository.php
+|   |   |   |-- RefreshTokenRepository.php
 |   |   |   |-- UserRepository.php         # Contrato de persistência
 |   |   |   `-- PdoUserRepository.php      # Implementação com PDO
 |   |   |-- Security/
@@ -202,12 +207,13 @@ docker compose exec api composer test
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários e JWT. Os testes de integração validam a conexão PDO, a persistência
-e a autenticação com um MySQL real.
+e a autenticação com um MySQL real, incluindo registro, rotação, revogação,
+reutilização e limpeza de refresh tokens.
 
 Resultado atual:
 
 ```text
-OK (65 tests, 164 assertions)
+OK (71 tests, 203 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -255,17 +261,18 @@ informações sensíveis.
 Para a autenticação, escolhi separar access e refresh tokens e armazená-los em
 cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
 CSRF ativo em produção. A emissão e a validação criptográfica dos dois tipos de
-token já estão implementadas. Vou persistir e rotacionar os refresh tokens,
-adicionar blacklist no logout e aplicar `SameSite` e CORS restrito à origem do
-frontend nos endpoints HTTP. O schema necessário para acompanhar a rotação,
-detectar reutilização e registrar tokens revogados já está preparado no MySQL.
+token já estão implementadas. Os refresh tokens são persistidos com seus
+identificadores protegidos, rotacionados em transações e têm reutilizações
+detectadas com revogação da família. Vou implementar a blacklist no logout e
+aplicar `SameSite` e CORS restrito à origem do frontend nos endpoints HTTP. O
+schema necessário para registrar tokens revogados já está preparado no MySQL.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar repositories e regras de rotação e blacklist dos tokens JWT;
+- implementar repository e regras da blacklist de tokens JWT;
 - implementar cadastro, login e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
