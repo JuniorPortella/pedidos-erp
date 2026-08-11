@@ -14,7 +14,7 @@ try {
         '/'
     );
 
-    [$healthStatus, $healthBody] = requestJson(
+    [$healthStatus, $healthBody, $healthHeaders] = requestJson(
         $baseUrl . '/health'
     );
 
@@ -27,9 +27,17 @@ try {
             && ($healthBody['status'] ?? null) === 'ok',
         'GET /health retornou um corpo inesperado.'
     );
+    assertSmoke(
+        !isset($healthHeaders['set-cookie']),
+        'GET /health nao deve criar cookies.'
+    );
     writeSuccess('API respondeu ao healthcheck');
 
-    [$notFoundStatus, $notFoundBody] = requestJson(
+    [
+        $notFoundStatus,
+        $notFoundBody,
+        $notFoundHeaders,
+    ] = requestJson(
         $baseUrl . '/rota-inexistente'
     );
 
@@ -40,6 +48,10 @@ try {
     assertSmoke(
         isset($notFoundBody['error']),
         'A resposta 404 deve possuir uma mensagem de erro.'
+    );
+    assertSmoke(
+        !isset($notFoundHeaders['set-cookie']),
+        'A resposta 404 nao deve criar cookies.'
     );
     writeSuccess('API tratou uma rota inexistente');
 
@@ -63,6 +75,10 @@ try {
     assertSmoke(
         ($methodNotAllowedHeaders['allow'] ?? null) === 'GET',
         'A resposta 405 deve informar Allow: GET.'
+    );
+    assertSmoke(
+        !isset($methodNotAllowedHeaders['set-cookie']),
+        'A resposta 405 nao deve criar cookies.'
     );
     writeSuccess('API rejeitou um metodo HTTP nao permitido');
 

@@ -28,6 +28,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - camada HTTP com request, response e tratamento centralizado de erros;
 - roteador para rotas estáticas e parametrizadas;
 - logs estruturados de requisições e exceções com Monolog;
+- serviço de cookies de autenticação com atributos de segurança testados;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -235,7 +236,8 @@ docker compose exec api composer test:smoke
 ```
 
 O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 404 e 405,
-incluindo o cabeçalho `Allow`, consulta o MySQL com PDO, confirma que não há
+incluindo o cabeçalho `Allow`, e confirma que essas respostas públicas não
+criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
 migrations pendentes e verifica as tabelas obrigatórias. Para executar PHPUnit
 e o smoke test em sequência:
 
@@ -246,15 +248,17 @@ docker compose exec api composer check
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários, JWT, CSRF, login, renovação de tokens, request, response, router,
-tratamento de erros, aplicação HTTP e logging. Os testes de integração validam
-a conexão PDO, a persistência e a autenticação com um MySQL real, incluindo
-registro, rotação, revogação, reutilização e limpeza de refresh tokens, além de
-inserção, consulta e limpeza da blacklist.
+tratamento de erros, aplicação HTTP, logging e cookies de autenticação. Os
+testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`, escopo,
+expiração, remoção e codificação contra injeção. Os testes de integração
+validam a conexão PDO, a persistência e a autenticação com um MySQL real,
+incluindo registro, rotação, revogação, reutilização e limpeza de refresh
+tokens, além de inserção, consulta e limpeza da blacklist.
 
 Resultado atual:
 
 ```text
-OK (131 tests, 402 assertions)
+OK (141 tests, 460 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
