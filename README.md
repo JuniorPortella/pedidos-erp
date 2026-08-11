@@ -6,27 +6,39 @@ ambiente para rodar com Docker.
 
 ## Estado atual
 
-Até agora, deixei a primeira etapa do ambiente pronta:
+Até agora, deixei a infraestrutura inicial da API pronta:
 
 - API executando com PHP e Apache;
 - MySQL isolado na rede do Docker;
-- conexão PHP -> MySQL validada com PDO;
+- variáveis de ambiente obrigatórias e booleanas validadas;
+- conexão PDO centralizada e validada com o MySQL;
 - healthchecks configurados para a API e o banco;
-- rota `GET /health` disponível para verificar a API.
+- rota `GET /health` disponível para verificar a API;
+- testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar as regras de negócio, a autenticação e o frontend.
+Ainda vou implementar as migrations, regras de negócio, autenticação, logs,
+criptografia de dados sensíveis e frontend.
 
 ## Estrutura
 
 ```text
 PedidosFull/
 |-- api/
-|   |-- docker/apache/       # Configuração do VirtualHost
-|   |-- public/index.php     # Ponto de entrada da API
+|   |-- docker/apache/                    # VirtualHost do Apache
+|   |-- public/index.php                  # Ponto de entrada da API
+|   |-- src/
+|   |   |-- Config/Environment.php        # Leitura e validação do ambiente
+|   |   `-- Database/ConnectionFactory.php # Criação da conexão PDO
+|   |-- tests/
+|   |   |-- Unit/                         # Testes isolados
+|   |   `-- Integration/                  # Testes com serviços reais
+|   |-- composer.json
+|   |-- composer.lock
+|   |-- phpunit.xml
 |   |-- .dockerignore
 |   `-- Dockerfile
-|-- frontend/                # Aplicação React (próxima etapa)
-|-- refatoracao/             # Exercício de refatoração do PHP legado
+|-- frontend/                             # Aplicação React
+|-- refatoracao/                          # Refatoração do PHP legado
 |-- .env.example
 |-- compose.yaml
 `-- README.md
@@ -41,6 +53,7 @@ Estas são as versões que validei no ambiente Docker atual:
 - Composer 2.10.2
 - MySQL 8.4.11 (`mysql:8.4`)
 - PDO MySQL
+- Libsodium
 - Docker Compose
 
 Dependências instaladas na API:
@@ -113,6 +126,23 @@ Resposta esperada:
 HTTP 200
 ```
 
+## Como executar os testes
+
+Com a API e o MySQL em execução, rodo:
+
+```bash
+docker compose exec api composer test
+```
+
+Atualmente, a suíte possui testes unitários para a validação das variáveis de
+ambiente e um teste de integração que cria uma conexão PDO real com o MySQL.
+
+Resultado atual:
+
+```text
+OK (8 tests, 11 assertions)
+```
+
 Para encerrar os containers sem apagar os dados do banco:
 
 ```bash
@@ -131,18 +161,39 @@ Escolhi desenvolver a API em PHP puro, sem Laravel ou Symfony. Vou separar o
 código em controllers, services, repositories e entities, com autoload PSR-4
 pelo Composer.
 
-Vou acessar o MySQL com PDO e prepared statements. Para a autenticação, escolhi
-armazenar o JWT em cookie `HttpOnly`. Vou definir `Secure`, `SameSite`, CORS e a
-proteção contra CSRF junto com a implementação da autenticação.
+Vou acessar o MySQL com PDO e prepared statements.
+
+As senhas serão armazenadas com hash irreversível utilizando `password_hash()`
+e verificadas com `password_verify()`. Senhas não serão criptografadas de forma
+reversível.
+
+Para os dados pessoais que realmente precisarem de criptografia reversível,
+utilizarei Libsodium com XChaCha20-Poly1305. A chave ficará somente nas
+variáveis de ambiente e nunca será armazenada no banco ou enviada ao
+repositório.
+
+Campos criptografados que precisarem de busca, como o e-mail, terão um índice
+de consulta separado. Isso permitirá localizar o usuário sem utilizar o texto
+original diretamente na pesquisa do banco.
+
+Essa criptografia será uma das medidas de segurança do projeto, junto com
+controle de acesso por perfil, exclusão lógica de usuários e logs sem
+informações sensíveis.
+
+Para a autenticação, escolhi armazenar o JWT em cookie `HttpOnly`. Vou definir
+`Secure`, `SameSite`, CORS e a proteção contra CSRF junto com a implementação
+da autenticação.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
+- implementar e testar a criptografia de dados sensíveis com Libsodium;
 - criar o schema e as migrations do banco;
+- implementar usuários, perfis e exclusão lógica;
 - implementar cadastro, login e autenticação;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
-- ampliar os testes unitários e criar testes de integração;
+- ampliar os testes unitários e criar testes de integração dos endpoints;
 - desenvolver o frontend em React com Material UI;
 - refatorar o código PHP legado fornecido no teste.
