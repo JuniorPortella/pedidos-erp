@@ -11,8 +11,6 @@ use PHPUnit\Framework\TestCase;
 
 final class UserTest extends TestCase
 {
-    private const PASSWORD = 'SenhaSegura@123';
-
     public function testRepresentsUserData(): void
     {
         $createdAt = new DateTimeImmutable(
@@ -39,19 +37,6 @@ final class UserTest extends TestCase
         self::assertNull($user->deletedAt);
     }
 
-    public function testVerifiesPassword(): void
-    {
-        $user = $this->createUser();
-
-        self::assertTrue(
-            $user->verifyPassword(self::PASSWORD)
-        );
-
-        self::assertFalse(
-            $user->verifyPassword('SenhaIncorreta')
-        );
-    }
-
     public function testIdentifiesLogicalDeletion(): void
     {
         $activeUser = $this->createUser();
@@ -76,10 +61,6 @@ final class UserTest extends TestCase
             name: 'Vagner Portella',
             email: 'vagner@example.com',
             username: 'vagner',
-            passwordHash: password_hash(
-                self::PASSWORD,
-                PASSWORD_DEFAULT
-            ),
             profile: UserProfile::Admin,
             active: true,
             createdAt: $createdAt ?? new DateTimeImmutable(),

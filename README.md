@@ -180,7 +180,7 @@ além de um teste de integração que cria uma conexão PDO real com o MySQL.
 Resultado atual:
 
 ```text
-OK (33 tests, 62 assertions)
+OK (35 tests, 86 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
