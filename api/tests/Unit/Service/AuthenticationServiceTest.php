@@ -7,6 +7,7 @@ namespace Tests\Unit\Service;
 use App\Config\AuthConfig;
 use App\Dto\IssuedToken;
 use App\Dto\TokenClaims;
+use App\Entity\TokenRevocationReason;
 use App\Entity\User;
 use App\Entity\UserProfile;
 use App\Exception\InvalidCredentialsException;
@@ -14,6 +15,7 @@ use App\Exception\InvalidTokenException;
 use App\Exception\RefreshTokenReuseException;
 use App\Repository\AuthenticationRepository;
 use App\Repository\RefreshTokenRepository;
+use App\Repository\TokenBlacklistRepository;
 use App\Repository\UserRepository;
 use App\Security\CsrfTokenService;
 use App\Service\AuthenticationService;
@@ -21,6 +23,7 @@ use App\Service\JwtService;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class AuthenticationServiceTest extends TestCase
 {
@@ -79,7 +82,8 @@ final class AuthenticationServiceTest extends TestCase
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
-            $this->createMock(UserRepository::class)
+            $this->createMock(UserRepository::class),
+            $this->createMock(TokenBlacklistRepository::class)
         );
 
         $result = $service->login(
@@ -138,7 +142,8 @@ final class AuthenticationServiceTest extends TestCase
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
-            $this->createMock(UserRepository::class)
+            $this->createMock(UserRepository::class),
+            $this->createMock(TokenBlacklistRepository::class)
         );
 
         $this->expectException(
@@ -177,7 +182,8 @@ final class AuthenticationServiceTest extends TestCase
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
-            $this->createMock(UserRepository::class)
+            $this->createMock(UserRepository::class),
+            $this->createMock(TokenBlacklistRepository::class)
         );
 
         $this->expectException(
@@ -245,7 +251,8 @@ final class AuthenticationServiceTest extends TestCase
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
-            $users
+            $users,
+            $this->createMock(TokenBlacklistRepository::class)
         );
 
         $result = $service->refresh(
@@ -463,6 +470,188 @@ final class AuthenticationServiceTest extends TestCase
         $service->refresh($currentRefresh->value);
     }
 
+    public function testLogsOutValidSession(): void
+    {
+        $accessToken = $this->jwtService->issueAccessToken(
+            10,
+            hash('sha256', 'csrf-de-logout')
+        );
+        $refreshToken = $this->jwtService
+            ->issueRefreshToken(10);
+
+        $refreshTokens = $this->createMock(
+            RefreshTokenRepository::class
+        );
+        $refreshTokens
+            ->expects(self::once())
+            ->method('revokeFamily')
+            ->with(10, $refreshToken->familyId);
+
+        $blacklist = $this->createMock(
+            TokenBlacklistRepository::class
+        );
+        $blacklist
+            ->expects(self::once())
+            ->method('add')
+            ->with(
+                self::callback(
+                    static fn (TokenClaims $claims): bool =>
+                        $claims->jti === $accessToken->jti
+                        && $claims->userId === 10
+                ),
+                TokenRevocationReason::Logout
+            );
+
+        $this->createLogoutService(
+            $refreshTokens,
+            $blacklist
+        )->logout(
+            $accessToken->value,
+            $refreshToken->value
+        );
+    }
+
+    public function testLogoutRevokesRefreshWhenAccessIsInvalid(): void
+    {
+        $refreshToken = $this->jwtService
+            ->issueRefreshToken(10);
+
+        $refreshTokens = $this->createMock(
+            RefreshTokenRepository::class
+        );
+        $refreshTokens
+            ->expects(self::once())
+            ->method('revokeFamily')
+            ->with(10, $refreshToken->familyId);
+
+        $blacklist = $this->createMock(
+            TokenBlacklistRepository::class
+        );
+        $blacklist
+            ->expects(self::never())
+            ->method('add');
+
+        $this->createLogoutService(
+            $refreshTokens,
+            $blacklist
+        )->logout(
+            'access-invalido',
+            $refreshToken->value
+        );
+    }
+
+    public function testLogoutBlocksAccessWhenRefreshIsInvalid(): void
+    {
+        $accessToken = $this->jwtService->issueAccessToken(
+            10,
+            hash('sha256', 'csrf-de-logout')
+        );
+
+        $refreshTokens = $this->createMock(
+            RefreshTokenRepository::class
+        );
+        $refreshTokens
+            ->expects(self::never())
+            ->method('revokeFamily');
+
+        $blacklist = $this->createMock(
+            TokenBlacklistRepository::class
+        );
+        $blacklist
+            ->expects(self::once())
+            ->method('add')
+            ->with(
+                self::callback(
+                    static fn (TokenClaims $claims): bool =>
+                        $claims->jti === $accessToken->jti
+                ),
+                TokenRevocationReason::Logout
+            );
+
+        $this->createLogoutService(
+            $refreshTokens,
+            $blacklist
+        )->logout(
+            $accessToken->value,
+            'refresh-invalido'
+        );
+    }
+
+    #[DataProvider('emptyOrInvalidLogoutTokens')]
+    public function testLogoutIsIdempotentWithInvalidTokens(
+        ?string $accessToken,
+        ?string $refreshToken
+    ): void {
+        $refreshTokens = $this->createMock(
+            RefreshTokenRepository::class
+        );
+        $refreshTokens
+            ->expects(self::never())
+            ->method('revokeFamily');
+
+        $blacklist = $this->createMock(
+            TokenBlacklistRepository::class
+        );
+        $blacklist
+            ->expects(self::never())
+            ->method('add');
+
+        $this->createLogoutService(
+            $refreshTokens,
+            $blacklist
+        )->logout($accessToken, $refreshToken);
+    }
+
+    public static function emptyOrInvalidLogoutTokens(): array
+    {
+        return [
+            'missing tokens' => [null, null],
+            'empty tokens' => ['', ''],
+            'invalid tokens' => [
+                'access-invalido',
+                'refresh-invalido',
+            ],
+        ];
+    }
+
+    public function testLogoutPropagatesRepositoryFailure(): void
+    {
+        $accessToken = $this->jwtService->issueAccessToken(
+            10,
+            hash('sha256', 'csrf-de-logout')
+        );
+        $refreshToken = $this->jwtService
+            ->issueRefreshToken(10);
+
+        $refreshTokens = $this->createMock(
+            RefreshTokenRepository::class
+        );
+        $refreshTokens
+            ->expects(self::once())
+            ->method('revokeFamily')
+            ->willThrowException(
+                new RuntimeException('Falha no banco.')
+            );
+
+        $blacklist = $this->createMock(
+            TokenBlacklistRepository::class
+        );
+        $blacklist
+            ->expects(self::never())
+            ->method('add');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Falha no banco.');
+
+        $this->createLogoutService(
+            $refreshTokens,
+            $blacklist
+        )->logout(
+            $accessToken->value,
+            $refreshToken->value
+        );
+    }
+
     public static function emptyCredentials(): array
     {
         return [
@@ -481,7 +670,22 @@ final class AuthenticationServiceTest extends TestCase
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
-            $users
+            $users,
+            $this->createMock(TokenBlacklistRepository::class)
+        );
+    }
+
+    private function createLogoutService(
+        RefreshTokenRepository $refreshTokens,
+        TokenBlacklistRepository $blacklist
+    ): AuthenticationService {
+        return new AuthenticationService(
+            $this->createMock(AuthenticationRepository::class),
+            $this->jwtService,
+            $this->csrfService,
+            $refreshTokens,
+            $this->createMock(UserRepository::class),
+            $blacklist
         );
     }
 

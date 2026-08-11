@@ -2,9 +2,20 @@
 
 declare(strict_types=1);
 
+use App\Config\AuthConfig;
 use App\Config\Environment;
 use App\Database\ConnectionFactory;
 use App\Database\MigrationRunner;
+use App\Entity\UserProfile;
+use App\Repository\PdoAuthenticationRepository;
+use App\Repository\PdoRefreshTokenRepository;
+use App\Repository\PdoTokenBlacklistRepository;
+use App\Repository\PdoUserRepository;
+use App\Security\CsrfTokenService;
+use App\Security\DataCipher;
+use App\Security\LookupHasher;
+use App\Service\AuthenticationService;
+use App\Service\JwtService;
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
@@ -139,6 +150,10 @@ try {
     }
 
     writeSuccess('Schema minimo esta disponivel');
+
+    verifyLogoutSecurity($connection);
+    writeSuccess('Logout revogou refresh e bloqueou access token');
+
     fwrite(STDOUT, 'Smoke test concluido.' . PHP_EOL);
     exit(0);
 } catch (Throwable $exception) {
@@ -221,6 +236,146 @@ function requestJson(
     }
 
     return [(int) $matches[1], $decodedBody, $headers];
+}
+
+function verifyLogoutSecurity(PDO $connection): void
+{
+    $connection->beginTransaction();
+
+    try {
+        $lookupHasher = new LookupHasher(
+            Environment::getRequired('DATA_LOOKUP_KEY')
+        );
+
+        $users = new PdoUserRepository(
+            $connection,
+            new DataCipher(
+                Environment::getRequired(
+                    'DATA_ENCRYPTION_KEY'
+                )
+            ),
+            $lookupHasher
+        );
+
+        $refreshTokens = new PdoRefreshTokenRepository(
+            $connection,
+            $lookupHasher
+        );
+
+        $blacklist = new PdoTokenBlacklistRepository(
+            $connection,
+            $lookupHasher
+        );
+
+        $jwtService = new JwtService(
+            AuthConfig::fromEnvironment()
+        );
+
+        $authentication = new AuthenticationService(
+            new PdoAuthenticationRepository(
+                $connection,
+                $users
+            ),
+            $jwtService,
+            new CsrfTokenService(),
+            $refreshTokens,
+            $users,
+            $blacklist
+        );
+
+        $suffix = bin2hex(random_bytes(8));
+
+        $user = $users->create(
+            'Smoke Logout',
+            sprintf('smoke-%s@example.test', $suffix),
+            'smoke_logout_' . $suffix,
+            password_hash(
+                'SenhaSmoke123',
+                PASSWORD_DEFAULT
+            ),
+            UserProfile::Operator
+        );
+
+        $csrfService = new CsrfTokenService();
+        $csrfToken = $csrfService->generate();
+
+        $accessToken = $jwtService->issueAccessToken(
+            $user->id,
+            $csrfService->hash($csrfToken)
+        );
+
+        $refreshToken = $jwtService->issueRefreshToken(
+            $user->id
+        );
+
+        $refreshTokens->register(
+            $user->id,
+            $refreshToken
+        );
+
+        $authentication->logout(
+            $accessToken->value,
+            $refreshToken->value
+        );
+
+        assertSmoke(
+            $blacklist->contains($accessToken->jti),
+            'Logout nao adicionou o access token a blacklist.'
+        );
+
+        $refreshStatement = $connection->prepare(
+            <<<'SQL'
+            SELECT jti_hash, revoked_at
+            FROM refresh_tokens
+            WHERE usuario_id = :usuario_id
+            SQL
+        );
+
+        $refreshStatement->execute([
+            'usuario_id' => $user->id,
+        ]);
+
+        $storedRefresh = $refreshStatement->fetch();
+
+        assertSmoke(
+            is_array($storedRefresh)
+                && $storedRefresh['revoked_at'] !== null,
+            'Logout nao revogou a familia do refresh token.'
+        );
+
+        assertSmoke(
+            is_array($storedRefresh)
+                && hash_equals(
+                    $storedRefresh['jti_hash'],
+                    $lookupHasher->hash(
+                        $refreshToken->jti,
+                        'refresh_tokens.jti'
+                    )
+                ),
+            'Refresh token nao foi persistido de forma protegida.'
+        );
+
+        $blacklistStatement = $connection->prepare(
+            <<<'SQL'
+            SELECT motivo
+            FROM token_blacklist
+            WHERE usuario_id = :usuario_id
+            SQL
+        );
+
+        $blacklistStatement->execute([
+            'usuario_id' => $user->id,
+        ]);
+
+        assertSmoke(
+            $blacklistStatement->fetchColumn() === 'LOGOUT',
+            'Blacklist nao registrou o motivo do logout.'
+        );
+    } finally {
+        if ($connection->inTransaction()) {
+            $connection->rollBack();
+        }
+    }
 }
 
 function assertSmoke(bool $condition, string $message): void

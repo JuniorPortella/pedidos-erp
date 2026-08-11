@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Dto\AuthenticationResult;
+use App\Dto\TokenClaims;
+use App\Entity\TokenRevocationReason;
 use App\Exception\InvalidCredentialsException;
 use App\Exception\InvalidTokenException;
 use App\Repository\AuthenticationRepository;
 use App\Repository\RefreshTokenRepository;
+use App\Repository\TokenBlacklistRepository;
 use App\Repository\UserRepository;
 use App\Security\CsrfTokenService;
 
@@ -19,7 +22,8 @@ final class AuthenticationService
         private readonly JwtService $jwtService,
         private readonly CsrfTokenService $csrfService,
         private readonly RefreshTokenRepository $refreshTokens,
-        private readonly UserRepository $users
+        private readonly UserRepository $users,
+        private readonly TokenBlacklistRepository $blacklist
     ) {
     }
 
@@ -120,5 +124,67 @@ final class AuthenticationService
             refreshToken: $replacementRefreshToken,
             csrfToken: $csrfToken
         );
+    }
+
+    public function logout(
+        ?string $accessTokenValue,
+        ?string $refreshTokenValue
+    ): void {
+        $refreshToken = $this->tryDecodeRefreshToken(
+            $refreshTokenValue
+        );
+
+        $accessToken = $this->tryDecodeAccessToken(
+            $accessTokenValue
+        );
+
+        if (
+            $refreshToken !== null
+            && $refreshToken->familyId !== null
+        ) {
+            $this->refreshTokens->revokeFamily(
+                $refreshToken->userId,
+                $refreshToken->familyId
+            );
+        }
+
+        if ($accessToken !== null) {
+            $this->blacklist->add(
+                $accessToken,
+                TokenRevocationReason::Logout
+            );
+        }
+    }
+
+    private function tryDecodeAccessToken(
+        ?string $value
+    ): ?TokenClaims {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return $this->jwtService->decodeAccessToken(
+                $value
+            );
+        } catch (InvalidTokenException) {
+            return null;
+        }
+    }
+
+    private function tryDecodeRefreshToken(
+        ?string $value
+    ): ?TokenClaims {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return $this->jwtService->decodeRefreshToken(
+                $value
+            );
+        } catch (InvalidTokenException) {
+            return null;
+        }
     }
 }

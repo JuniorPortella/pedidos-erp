@@ -25,6 +25,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - blacklist persistente e idempotente para tokens JWT;
 - login com emissão de tokens e vínculo CSRF;
 - renovação com rotação do refresh token e novo vínculo CSRF;
+- logout com revogação do refresh e blacklist do access token;
 - camada HTTP com request, response e tratamento centralizado de erros;
 - roteador para rotas estáticas e parametrizadas;
 - logs estruturados de requisições e exceções com Monolog;
@@ -238,8 +239,9 @@ docker compose exec api composer test:smoke
 O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 404 e 405,
 incluindo o cabeçalho `Allow`, e confirma que essas respostas públicas não
 criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
-migrations pendentes e verifica as tabelas obrigatórias. Para executar PHPUnit
-e o smoke test em sequência:
+migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
+em uma transação temporária para validar a revogação e a blacklist. Para
+executar PHPUnit e o smoke test em sequência:
 
 ```bash
 docker compose exec api composer check
@@ -248,9 +250,9 @@ docker compose exec api composer check
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários, JWT, CSRF, login, renovação de tokens, request, response, router,
-tratamento de erros, aplicação HTTP, logging e cookies de autenticação. Os
-testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`, escopo,
-expiração, remoção e codificação contra injeção. Os testes de integração
+logout, tratamento de erros, aplicação HTTP, logging e cookies de autenticação.
+Os testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`,
+escopo, expiração, remoção e codificação contra injeção. Os testes de integração
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
 incluindo registro, rotação, revogação, reutilização e limpeza de refresh
 tokens, além de inserção, consulta e limpeza da blacklist.
@@ -258,7 +260,7 @@ tokens, além de inserção, consulta e limpeza da blacklist.
 Resultado atual:
 
 ```text
-OK (141 tests, 460 assertions)
+OK (148 tests, 484 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -313,9 +315,10 @@ para bloquear tokens ainda válidos. O login já autentica credenciais, gera os
 tokens, vincula o CSRF ao access token e registra o refresh. A rotação já faz
 parte do service de autenticação: ela valida o refresh atual,
 consulta se o usuário continua ativo, preserva a família, invalida o token
-usado e emite um novo par de tokens com um novo CSRF. Ainda vou implementar o
-logout e aplicar os cookies `HttpOnly`, `SameSite`, a validação CSRF e o CORS
-restrito à origem do frontend na camada HTTP.
+usado e emite um novo par de tokens com um novo CSRF. O logout já revoga a
+família do refresh e bloqueia o access token ainda válido. Ainda vou conectar
+essas regras aos endpoints e aplicar os cookies `HttpOnly`, `SameSite`, a
+validação CSRF e o CORS restrito à origem do frontend na camada HTTP.
 
 ## Limitações atuais
 
@@ -335,7 +338,7 @@ representa a aplicação completa. Neste momento:
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar logout no service de autenticação;
+- expor login, refresh e logout nos endpoints de autenticação;
 - implementar controllers, cadastro e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - ampliar os testes unitários e criar testes de integração dos endpoints;
