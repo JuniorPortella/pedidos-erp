@@ -14,7 +14,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - conexão PDO centralizada e validada com o MySQL;
 - criptografia autenticada implementada e testada com Libsodium;
 - hash protegido para consultas de dados criptografados;
-- migrations versionadas para as tabelas de usuários e pedidos;
+- migrations versionadas para usuários, pedidos, refresh tokens e blacklist;
 - entidade, perfis e validação do cadastro de usuários;
 - persistência de usuários com PDO e proteção dos dados sensíveis;
 - service de usuários com validação de duplicidade e hash de senha;
@@ -257,14 +257,15 @@ cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
 CSRF ativo em produção. A emissão e a validação criptográfica dos dois tipos de
 token já estão implementadas. Vou persistir e rotacionar os refresh tokens,
 adicionar blacklist no logout e aplicar `SameSite` e CORS restrito à origem do
-frontend nos endpoints HTTP.
+frontend nos endpoints HTTP. O schema necessário para acompanhar a rotação,
+detectar reutilização e registrar tokens revogados já está preparado no MySQL.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar persistência, rotação e blacklist dos tokens JWT;
+- implementar repositories e regras de rotação e blacklist dos tokens JWT;
 - implementar cadastro, login e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
