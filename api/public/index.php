@@ -2,30 +2,17 @@
 
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
+use App\Http\Application;
+use App\Http\Request;
 
-$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-$path = parse_url($requestUri, PHP_URL_PATH);
+require dirname(__DIR__) . '/vendor/autoload.php';
 
-if ($path === '/' || $path === '/health') {
-    http_response_code(200);
+/** @var Application $application */
+$application = require dirname(__DIR__)
+    . '/bootstrap/app.php';
 
-    echo json_encode(
-        [
-            'service' => 'pedidos-api',
-            'status' => 'ok',
-        ],
-        JSON_THROW_ON_ERROR
-    );
+$request = Request::fromGlobals();
 
-    exit;
-}
+$response = $application->handle($request);
 
-http_response_code(404);
-
-echo json_encode(
-    [
-        'error' => 'Rota nao encontrada.',
-    ],
-    JSON_THROW_ON_ERROR
-);
+$response->emit();

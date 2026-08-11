@@ -43,6 +43,29 @@ try {
     );
     writeSuccess('API tratou uma rota inexistente');
 
+    [
+        $methodNotAllowedStatus,
+        $methodNotAllowedBody,
+        $methodNotAllowedHeaders,
+    ] = requestJson(
+        $baseUrl . '/health',
+        'POST'
+    );
+
+    assertSmoke(
+        $methodNotAllowedStatus === 405,
+        'POST /health deve responder HTTP 405.'
+    );
+    assertSmoke(
+        isset($methodNotAllowedBody['error']),
+        'A resposta 405 deve possuir uma mensagem de erro.'
+    );
+    assertSmoke(
+        ($methodNotAllowedHeaders['allow'] ?? null) === 'GET',
+        'A resposta 405 deve informar Allow: GET.'
+    );
+    writeSuccess('API rejeitou um metodo HTTP nao permitido');
+
     $connection = ConnectionFactory::create();
     $databaseVersion = $connection
         ->query('SELECT VERSION()')
@@ -116,12 +139,20 @@ try {
 }
 
 /**
- * @return array{0: int, 1: array<string, mixed>}
+ * @return array{
+ *     0: int,
+ *     1: array<string, mixed>,
+ *     2: array<string, string>
+ * }
  */
-function requestJson(string $url): array
+function requestJson(
+    string $url,
+    string $method = 'GET'
+): array
 {
     $context = stream_context_create([
         'http' => [
+            'method' => $method,
             'ignore_errors' => true,
             'timeout' => 5,
         ],
@@ -162,7 +193,18 @@ function requestJson(string $url): array
         );
     }
 
-    return [(int) $matches[1], $decodedBody];
+    $headers = [];
+
+    foreach (array_slice($http_response_header, 1) as $headerLine) {
+        if (!str_contains($headerLine, ':')) {
+            continue;
+        }
+
+        [$name, $value] = explode(':', $headerLine, 2);
+        $headers[strtolower(trim($name))] = trim($value);
+    }
+
+    return [(int) $matches[1], $decodedBody, $headers];
 }
 
 function assertSmoke(bool $condition, string $message): void

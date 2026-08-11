@@ -25,22 +25,27 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - blacklist persistente e idempotente para tokens JWT;
 - login com emissão de tokens e vínculo CSRF;
 - renovação com rotação do refresh token e novo vínculo CSRF;
+- camada HTTP com request, response e tratamento centralizado de erros;
+- roteador para rotas estáticas e parametrizadas;
+- logs estruturados de requisições e exceções com Monolog;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
 Ainda vou implementar atualização e exclusão de usuários, endpoints de
-autenticação, logs, pedidos e frontend.
+autenticação, pedidos e frontend.
 
 ## Estrutura
 
 ```text
 PedidosFull/
 |-- api/
+|   |-- bootstrap/app.php                  # Montagem da aplicação
 |   |-- bin/migrate.php                   # Comando de migrations
 |   |-- database/migrations/              # Alterações versionadas do banco
 |   |-- docker/apache/                    # VirtualHost do Apache
 |   |-- public/index.php                  # Ponto de entrada da API
+|   |-- routes/api.php                    # Registro das rotas HTTP
 |   |-- src/
 |   |   |-- Config/
 |   |   |   |-- AuthConfig.php             # Configuração segura da autenticação
@@ -59,11 +64,16 @@ PedidosFull/
 |   |   |   |-- User.php                   # Entidade de usuário
 |   |   |   `-- UserProfile.php            # Perfis de acesso
 |   |   |-- Exception/
+|   |   |   |-- InvalidJsonBodyException.php
 |   |   |   |-- InvalidTokenException.php
 |   |   |   |-- InvalidCredentialsException.php
+|   |   |   |-- MethodNotAllowedException.php
 |   |   |   |-- RefreshTokenNotActiveException.php
 |   |   |   |-- RefreshTokenReuseException.php
+|   |   |   |-- RouteNotFoundException.php
 |   |   |   `-- ValidationException.php
+|   |   |-- Http/                         # Entrada e saída HTTP da aplicação
+|   |   |-- Logging/                      # Configuração do Monolog
 |   |   |-- Repository/
 |   |   |   |-- AuthenticationRepository.php
 |   |   |   |-- PdoAuthenticationRepository.php
@@ -77,6 +87,7 @@ PedidosFull/
 |   |   |   |-- CsrfTokenService.php       # Geração e validação de CSRF
 |   |   |   |-- DataCipher.php             # Criptografia autenticada
 |   |   |   `-- LookupHasher.php            # Hash protegido para consultas
+|   |   |-- Routing/                      # Registro e resolução de rotas
 |   |   `-- Service/
 |   |       |-- AuthenticationService.php   # Regras de autenticação
 |   |       |-- CreateUserInputValidator.php
@@ -223,9 +234,10 @@ docker compose exec api composer test:integration
 docker compose exec api composer test:smoke
 ```
 
-O smoke test acessa a API pelo Apache, valida as respostas HTTP 200 e 404,
-consulta o MySQL com PDO, confirma que não há migrations pendentes e verifica
-as tabelas obrigatórias. Para executar PHPUnit e o smoke test em sequência:
+O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 404 e 405,
+incluindo o cabeçalho `Allow`, consulta o MySQL com PDO, confirma que não há
+migrations pendentes e verifica as tabelas obrigatórias. Para executar PHPUnit
+e o smoke test em sequência:
 
 ```bash
 docker compose exec api composer check
@@ -233,15 +245,16 @@ docker compose exec api composer check
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
-de usuários, JWT, CSRF, login e renovação de tokens. Os testes de integração
-validam a conexão PDO, a persistência e a autenticação com um MySQL real,
-incluindo registro, rotação, revogação, reutilização e limpeza de refresh
-tokens, além de inserção, consulta e limpeza da blacklist.
+de usuários, JWT, CSRF, login, renovação de tokens, request, response, router,
+tratamento de erros, aplicação HTTP e logging. Os testes de integração validam
+a conexão PDO, a persistência e a autenticação com um MySQL real, incluindo
+registro, rotação, revogação, reutilização e limpeza de refresh tokens, além de
+inserção, consulta e limpeza da blacklist.
 
 Resultado atual:
 
 ```text
-OK (89 tests, 288 assertions)
+OK (131 tests, 402 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -306,11 +319,10 @@ A base de domínio, persistência e autenticação está em construção e ainda
 representa a aplicação completa. Neste momento:
 
 - apenas as rotas técnicas `/` e `/health` estão expostas;
-- ainda não existem controllers, router e middlewares HTTP;
+- ainda não existem controllers e middlewares HTTP;
 - a blacklist está persistida, mas será consultada pelo middleware de acesso;
 - os cookies de autenticação, autorização por perfil, CSRF e logout ainda não
   estão conectados a endpoints;
-- os logs de requisições e exceções ainda não foram implementados;
 - a regra de pedidos, o frontend React e a refatoração legada ainda serão
   desenvolvidos.
 
@@ -320,9 +332,8 @@ Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
 - implementar logout no service de autenticação;
-- implementar cadastro e autorização por perfil;
+- implementar controllers, cadastro e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
-- adicionar validação, logs e tratamento de erros;
 - ampliar os testes unitários e criar testes de integração dos endpoints;
 - desenvolver o frontend em React com Material UI;
 - refatorar o código PHP legado fornecido no teste.
