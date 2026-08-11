@@ -13,23 +13,28 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - variáveis de ambiente obrigatórias e booleanas validadas;
 - conexão PDO centralizada e validada com o MySQL;
 - criptografia autenticada implementada e testada com Libsodium;
+- migrations versionadas para as tabelas de usuários e pedidos;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar as migrations, regras de negócio, autenticação, logs,
-integração da criptografia aos usuários e frontend.
+Ainda vou implementar as regras de negócio, autenticação, logs, integração da
+criptografia aos usuários e frontend.
 
 ## Estrutura
 
 ```text
 PedidosFull/
 |-- api/
+|   |-- bin/migrate.php                   # Comando de migrations
+|   |-- database/migrations/              # Alterações versionadas do banco
 |   |-- docker/apache/                    # VirtualHost do Apache
 |   |-- public/index.php                  # Ponto de entrada da API
 |   |-- src/
 |   |   |-- Config/Environment.php        # Leitura e validação do ambiente
-|   |   |-- Database/ConnectionFactory.php # Criação da conexão PDO
+|   |   |-- Database/
+|   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
+|   |   |   `-- MigrationRunner.php       # Execução das migrations
 |   |   `-- Security/DataCipher.php        # Criptografia autenticada
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
@@ -87,6 +92,15 @@ openssl rand -hex 24
 Execute o comando duas vezes e coloque os resultados no `.env`. Esse arquivo é
 ignorado pelo Git e não deve ser enviado ao repositório.
 
+Gere também a chave de 32 bytes usada na criptografia autenticada:
+
+```bash
+openssl rand -base64 32
+```
+
+Coloque o resultado em `DATA_ENCRYPTION_KEY` no `.env`. A perda dessa chave
+impede a recuperação dos dados criptografados.
+
 Suba a API e o MySQL:
 
 ```bash
@@ -98,6 +112,15 @@ Confira os containers:
 ```bash
 docker compose ps
 ```
+
+Execute as migrations:
+
+```bash
+docker compose exec api php bin/migrate.php
+```
+
+O comando cria as tabelas pendentes e registra cada versão em
+`schema_migrations`. Execuções seguintes ignoram migrations já aplicadas.
 
 Deixei a API disponível em:
 
@@ -166,6 +189,10 @@ pelo Composer.
 
 Vou acessar o MySQL com PDO e prepared statements.
 
+As mudanças estruturais do banco são aplicadas por migrations versionadas. O
+runner executa os arquivos em ordem e registra cada versão concluída na tabela
+`schema_migrations`.
+
 As senhas serão armazenadas com hash irreversível utilizando `password_hash()`
 e verificadas com `password_verify()`. Senhas não serão criptografadas de forma
 reversível.
@@ -192,7 +219,6 @@ da autenticação.
 Meus próximos passos são:
 
 - integrar a criptografia aos dados sensíveis de usuários;
-- criar o schema e as migrations do banco;
 - implementar usuários, perfis e exclusão lógica;
 - implementar cadastro, login e autenticação;
 - implementar criação, listagem, consulta e atualização de pedidos;
