@@ -23,6 +23,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - emissão e validação de access e refresh tokens JWT;
 - rotação transacional de refresh tokens com detecção de reutilização;
 - blacklist persistente e idempotente para tokens JWT;
+- login com emissão de tokens e vínculo CSRF;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -47,6 +48,7 @@ PedidosFull/
 |   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
 |   |   |   `-- MigrationRunner.php       # Execução das migrations
 |   |   |-- Dto/
+|   |   |   |-- AuthenticationResult.php   # Resultado do login e refresh
 |   |   |   |-- CreateUserInput.php        # Dados validados do cadastro
 |   |   |   |-- IssuedToken.php            # Token emitido e seus metadados
 |   |   |   `-- TokenClaims.php            # Claims validadas do token
@@ -57,6 +59,7 @@ PedidosFull/
 |   |   |   `-- UserProfile.php            # Perfis de acesso
 |   |   |-- Exception/
 |   |   |   |-- InvalidTokenException.php
+|   |   |   |-- InvalidCredentialsException.php
 |   |   |   |-- RefreshTokenNotActiveException.php
 |   |   |   |-- RefreshTokenReuseException.php
 |   |   |   `-- ValidationException.php
@@ -70,9 +73,11 @@ PedidosFull/
 |   |   |   |-- UserRepository.php         # Contrato de persistência
 |   |   |   `-- PdoUserRepository.php      # Implementação com PDO
 |   |   |-- Security/
+|   |   |   |-- CsrfTokenService.php       # Geração e validação de CSRF
 |   |   |   |-- DataCipher.php             # Criptografia autenticada
 |   |   |   `-- LookupHasher.php            # Hash protegido para consultas
 |   |   `-- Service/
+|   |       |-- AuthenticationService.php   # Regras de autenticação
 |   |       |-- CreateUserInputValidator.php
 |   |       |-- JwtService.php              # Emissão e validação de JWT
 |   |       `-- UserService.php             # Regras de usuários
@@ -210,15 +215,15 @@ docker compose exec api composer test
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
-de usuários e JWT. Os testes de integração validam a conexão PDO, a persistência
-e a autenticação com um MySQL real, incluindo registro, rotação, revogação,
-reutilização e limpeza de refresh tokens, além de inserção, consulta e limpeza
-da blacklist.
+de usuários, JWT, CSRF e login. Os testes de integração validam a conexão PDO,
+a persistência e a autenticação com um MySQL real, incluindo registro, rotação,
+revogação, reutilização e limpeza de refresh tokens, além de inserção, consulta
+e limpeza da blacklist.
 
 Resultado atual:
 
 ```text
-OK (73 tests, 216 assertions)
+OK (81 tests, 252 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -269,16 +274,17 @@ CSRF ativo em produção. A emissão e a validação criptográfica dos dois tip
 token já estão implementadas. Os refresh tokens são persistidos com seus
 identificadores protegidos, rotacionados em transações e têm reutilizações
 detectadas com revogação da família. A blacklist persistente também está pronta
-para bloquear tokens ainda válidos. Vou integrar essas regras ao login, refresh
-e logout e aplicar `SameSite` e CORS restrito à origem do frontend nos endpoints
-HTTP.
+para bloquear tokens ainda válidos. O login já autentica credenciais, gera os
+tokens, vincula o CSRF ao access token e registra o refresh. Vou integrar a
+rotação ao refresh, implementar o logout e aplicar `SameSite` e CORS restrito à
+origem do frontend nos endpoints HTTP.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar service de login, refresh e logout;
+- implementar refresh e logout no service de autenticação;
 - implementar cadastro e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
