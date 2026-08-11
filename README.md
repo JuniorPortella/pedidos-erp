@@ -1,8 +1,8 @@
 # Gerenciamento de Pedidos
 
-Projeto desenvolvido para o teste técnico de Fullstack. A proposta é criar uma
--API de pedidos em PHP, uma interface em React e deixar todo o ambiente pronto
--para rodar com Docker.
+Estou desenvolvendo este projeto para o teste técnico fullstack. Meu objetivo é
+criar uma API de pedidos em PHP, uma interface em React e preparar todo o
+ambiente para rodar com Docker.
 
 ## Estado atual
 
@@ -49,8 +49,8 @@ Dependências instaladas na API:
 - Firebase PHP-JWT 7.1
 - Monolog 3.10
 
-Vou criar o frontend com Node.js 22, React 18.3.1, React Router 7, TypeScript e
-Vite. Essas dependências ainda não fazem parte do ambiente atual.
+Vou criar o frontend com Node.js 22, React 18.3.1, React Router 7, TypeScript,
+Vite e Material UI. Essas dependências ainda não fazem parte do ambiente atual.
 
 ## Como executar
 
@@ -100,7 +100,7 @@ http://localhost:18080
 | `GET` | `/` | Confirma que o serviço está ativo |
 | `GET` | `/health` | Healthcheck da API |
 
-Teste rapido:
+Teste rápido:
 
 ```bash
 curl -sS -w '\nHTTP %{http_code}\n' http://localhost:18080/health
@@ -125,7 +125,7 @@ Para reiniciar o banco do zero, removendo o volume e todos os dados:
 docker compose down -v
 ```
 
-## Decisoes do projeto
+## Decisões do projeto
 
 Escolhi desenvolver a API em PHP puro, sem Laravel ou Symfony. Vou separar o
 código em controllers, services, repositories e entities, com autoload PSR-4
@@ -139,11 +139,10 @@ proteção contra CSRF junto com a implementação da autenticação.
 
 Meus próximos passos são:
 
-- configurar o projeto Composer e o autoload PSR-4;
 - criar o schema e as migrations do banco;
 - implementar cadastro, login e autenticação;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
-- criar testes unitários e de integração;
-- desenvolver o frontend em React;
+- ampliar os testes unitários e criar testes de integração;
+- desenvolver o frontend em React com Material UI;
 - refatorar o código PHP legado fornecido no teste.

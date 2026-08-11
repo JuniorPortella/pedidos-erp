@@ -28,6 +28,11 @@ COPY composer.json composer.lock ./
 RUN COMPOSER_ALLOW_SUPERUSER=1 composer install \
     --no-interaction \
     --prefer-dist \
-    --no-progress
+    --no-progress \
+    --no-autoloader
 
 COPY . .
+
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload \
+    --optimize \
+    --no-interaction
