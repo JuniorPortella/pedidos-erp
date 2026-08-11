@@ -18,6 +18,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - entidade, perfis e validação do cadastro de usuários;
 - persistência de usuários com PDO e proteção dos dados sensíveis;
 - service de usuários com validação de duplicidade e hash de senha;
+- backend de autenticação com verificação isolada de credenciais;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -45,6 +46,8 @@ PedidosFull/
 |   |   |   `-- UserProfile.php            # Perfis de acesso
 |   |   |-- Exception/ValidationException.php
 |   |   |-- Repository/
+|   |   |   |-- AuthenticationRepository.php
+|   |   |   |-- PdoAuthenticationRepository.php
 |   |   |   |-- UserRepository.php         # Contrato de persistência
 |   |   |   `-- PdoUserRepository.php      # Implementação com PDO
 |   |   |-- Security/
@@ -182,13 +185,13 @@ docker compose exec api composer test
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidade, validação e service de
-usuários. Os testes de integração validam a conexão PDO e o repository com um
-MySQL real.
+usuários. Os testes de integração validam a conexão PDO, a persistência e a
+autenticação com um MySQL real.
 
 Resultado atual:
 
 ```text
-OK (38 tests, 98 assertions)
+OK (41 tests, 104 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
