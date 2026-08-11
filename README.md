@@ -22,6 +22,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - configuração de autenticação validada para desenvolvimento e produção;
 - emissão e validação de access e refresh tokens JWT;
 - rotação transacional de refresh tokens com detecção de reutilização;
+- blacklist persistente e idempotente para tokens JWT;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -50,6 +51,7 @@ PedidosFull/
 |   |   |   |-- IssuedToken.php            # Token emitido e seus metadados
 |   |   |   `-- TokenClaims.php            # Claims validadas do token
 |   |   |-- Entity/
+|   |   |   |-- TokenRevocationReason.php  # Motivos de revogação
 |   |   |   |-- TokenType.php              # Tipos access e refresh
 |   |   |   |-- User.php                   # Entidade de usuário
 |   |   |   `-- UserProfile.php            # Perfis de acesso
@@ -62,7 +64,9 @@ PedidosFull/
 |   |   |   |-- AuthenticationRepository.php
 |   |   |   |-- PdoAuthenticationRepository.php
 |   |   |   |-- PdoRefreshTokenRepository.php
+|   |   |   |-- PdoTokenBlacklistRepository.php
 |   |   |   |-- RefreshTokenRepository.php
+|   |   |   |-- TokenBlacklistRepository.php
 |   |   |   |-- UserRepository.php         # Contrato de persistência
 |   |   |   `-- PdoUserRepository.php      # Implementação com PDO
 |   |   |-- Security/
@@ -208,12 +212,13 @@ Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários e JWT. Os testes de integração validam a conexão PDO, a persistência
 e a autenticação com um MySQL real, incluindo registro, rotação, revogação,
-reutilização e limpeza de refresh tokens.
+reutilização e limpeza de refresh tokens, além de inserção, consulta e limpeza
+da blacklist.
 
 Resultado atual:
 
 ```text
-OK (71 tests, 203 assertions)
+OK (73 tests, 216 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -263,17 +268,18 @@ cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
 CSRF ativo em produção. A emissão e a validação criptográfica dos dois tipos de
 token já estão implementadas. Os refresh tokens são persistidos com seus
 identificadores protegidos, rotacionados em transações e têm reutilizações
-detectadas com revogação da família. Vou implementar a blacklist no logout e
-aplicar `SameSite` e CORS restrito à origem do frontend nos endpoints HTTP. O
-schema necessário para registrar tokens revogados já está preparado no MySQL.
+detectadas com revogação da família. A blacklist persistente também está pronta
+para bloquear tokens ainda válidos. Vou integrar essas regras ao login, refresh
+e logout e aplicar `SameSite` e CORS restrito à origem do frontend nos endpoints
+HTTP.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar repository e regras da blacklist de tokens JWT;
-- implementar cadastro, login e autorização por perfil;
+- implementar service de login, refresh e logout;
+- implementar cadastro e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
 - ampliar os testes unitários e criar testes de integração dos endpoints;
