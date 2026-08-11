@@ -13,13 +13,15 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - variáveis de ambiente obrigatórias e booleanas validadas;
 - conexão PDO centralizada e validada com o MySQL;
 - criptografia autenticada implementada e testada com Libsodium;
+- hash protegido para consultas de dados criptografados;
 - migrations versionadas para as tabelas de usuários e pedidos;
+- entidade, perfis e validação do cadastro de usuários;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar as regras de negócio, autenticação, logs, integração da
-criptografia aos usuários e frontend.
+Ainda vou implementar a persistência dos usuários, autenticação, logs,
+integração da criptografia aos repositories e frontend.
 
 ## Estrutura
 
@@ -35,7 +37,15 @@ PedidosFull/
 |   |   |-- Database/
 |   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
 |   |   |   `-- MigrationRunner.php       # Execução das migrations
-|   |   `-- Security/DataCipher.php        # Criptografia autenticada
+|   |   |-- Dto/CreateUserInput.php        # Dados validados do cadastro
+|   |   |-- Entity/
+|   |   |   |-- User.php                   # Entidade de usuário
+|   |   |   `-- UserProfile.php            # Perfis de acesso
+|   |   |-- Exception/ValidationException.php
+|   |   |-- Security/
+|   |   |   |-- DataCipher.php             # Criptografia autenticada
+|   |   |   `-- LookupHasher.php            # Hash protegido para consultas
+|   |   `-- Service/CreateUserInputValidator.php
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
 |   |   `-- Integration/                  # Testes com serviços reais
@@ -164,13 +174,13 @@ docker compose exec api composer test
 ```
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
-criptografia autenticada e hashes de consulta, além de um teste de integração
-que cria uma conexão PDO real com o MySQL.
+criptografia autenticada, hashes de consulta, entidade e validação de usuários,
+além de um teste de integração que cria uma conexão PDO real com o MySQL.
 
 Resultado atual:
 
 ```text
-OK (21 tests, 35 assertions)
+OK (33 tests, 62 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -223,8 +233,8 @@ da autenticação.
 
 Meus próximos passos são:
 
-- integrar a criptografia aos dados sensíveis de usuários;
-- implementar usuários, perfis e exclusão lógica;
+- integrar a criptografia aos dados sensíveis no repository de usuários;
+- implementar persistência, consulta e exclusão lógica de usuários;
 - implementar cadastro, login e autenticação;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
