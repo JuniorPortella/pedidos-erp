@@ -20,12 +20,13 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - service de usuários com validação de duplicidade e hash de senha;
 - backend de autenticação com verificação isolada de credenciais;
 - configuração de autenticação validada para desenvolvimento e produção;
+- emissão e validação de access e refresh tokens JWT;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar atualização e exclusão de usuários, autenticação, logs,
-endpoints HTTP, pedidos e frontend.
+Ainda vou implementar atualização e exclusão de usuários, endpoints de
+autenticação, logs, pedidos e frontend.
 
 ## Estrutura
 
@@ -43,11 +44,17 @@ PedidosFull/
 |   |   |-- Database/
 |   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
 |   |   |   `-- MigrationRunner.php       # Execução das migrations
-|   |   |-- Dto/CreateUserInput.php        # Dados validados do cadastro
+|   |   |-- Dto/
+|   |   |   |-- CreateUserInput.php        # Dados validados do cadastro
+|   |   |   |-- IssuedToken.php            # Token emitido e seus metadados
+|   |   |   `-- TokenClaims.php            # Claims validadas do token
 |   |   |-- Entity/
+|   |   |   |-- TokenType.php              # Tipos access e refresh
 |   |   |   |-- User.php                   # Entidade de usuário
 |   |   |   `-- UserProfile.php            # Perfis de acesso
-|   |   |-- Exception/ValidationException.php
+|   |   |-- Exception/
+|   |   |   |-- InvalidTokenException.php
+|   |   |   `-- ValidationException.php
 |   |   |-- Repository/
 |   |   |   |-- AuthenticationRepository.php
 |   |   |   |-- PdoAuthenticationRepository.php
@@ -58,6 +65,7 @@ PedidosFull/
 |   |   |   `-- LookupHasher.php            # Hash protegido para consultas
 |   |   `-- Service/
 |   |       |-- CreateUserInputValidator.php
+|   |       |-- JwtService.php              # Emissão e validação de JWT
 |   |       `-- UserService.php             # Regras de usuários
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
@@ -192,14 +200,14 @@ docker compose exec api composer test
 ```
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
-criptografia autenticada, hashes de consulta, entidade, validação e service de
-usuários. Os testes de integração validam a conexão PDO, a persistência e a
-autenticação com um MySQL real.
+criptografia autenticada, hashes de consulta, entidades, validação e services
+de usuários e JWT. Os testes de integração validam a conexão PDO, a persistência
+e a autenticação com um MySQL real.
 
 Resultado atual:
 
 ```text
-OK (59 tests, 144 assertions)
+OK (65 tests, 164 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -246,15 +254,17 @@ informações sensíveis.
 
 Para a autenticação, escolhi separar access e refresh tokens e armazená-los em
 cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
-CSRF ativo em produção. Vou implementar rotação de refresh tokens, blacklist no
-logout, validação de `SameSite` e CORS restrito à origem do frontend.
+CSRF ativo em produção. A emissão e a validação criptográfica dos dois tipos de
+token já estão implementadas. Vou persistir e rotacionar os refresh tokens,
+adicionar blacklist no logout e aplicar `SameSite` e CORS restrito à origem do
+frontend nos endpoints HTTP.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar emissão, rotação e blacklist dos tokens JWT;
+- implementar persistência, rotação e blacklist dos tokens JWT;
 - implementar cadastro, login e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
