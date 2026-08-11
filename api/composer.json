@@ -26,7 +26,14 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite Unit",
+        "test:integration": "phpunit --testsuite Integration",
+        "test:smoke": "php tests/Smoke/run.php",
+        "check": [
+            "@test",
+            "@test:smoke"
+        ]
     },
     "config": {
         "optimize-autoloader": true,

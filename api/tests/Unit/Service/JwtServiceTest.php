@@ -122,4 +122,16 @@ final class JwtServiceTest extends TestCase
 
         $this->service->decodeAccessToken($access->value);
     }
+
+    public function testRejectsExpiredRefreshToken(): void
+    {
+        $refresh = $this->service->issueRefreshToken(10);
+
+        JWT::$timestamp = $refresh->expiresAt + 1;
+
+        $this->expectException(InvalidTokenException::class);
+        $this->expectExceptionMessage('Token invalido ou expirado.');
+
+        $this->service->decodeRefreshToken($refresh->value);
+    }
 }

@@ -24,6 +24,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - rotação transacional de refresh tokens com detecção de reutilização;
 - blacklist persistente e idempotente para tokens JWT;
 - login com emissão de tokens e vínculo CSRF;
+- renovação com rotação do refresh token e novo vínculo CSRF;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -83,7 +84,8 @@ PedidosFull/
 |   |       `-- UserService.php             # Regras de usuários
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
-|   |   `-- Integration/                  # Testes com serviços reais
+|   |   |-- Integration/                  # Testes com serviços reais
+|   |   `-- Smoke/                        # Verificação do ambiente completo
 |   |-- composer.json
 |   |-- composer.lock
 |   |-- phpunit.xml
@@ -213,17 +215,33 @@ Com a API e o MySQL em execução, rodo:
 docker compose exec api composer test
 ```
 
+Também posso executar cada camada separadamente:
+
+```bash
+docker compose exec api composer test:unit
+docker compose exec api composer test:integration
+docker compose exec api composer test:smoke
+```
+
+O smoke test acessa a API pelo Apache, valida as respostas HTTP 200 e 404,
+consulta o MySQL com PDO, confirma que não há migrations pendentes e verifica
+as tabelas obrigatórias. Para executar PHPUnit e o smoke test em sequência:
+
+```bash
+docker compose exec api composer check
+```
+
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
-de usuários, JWT, CSRF e login. Os testes de integração validam a conexão PDO,
-a persistência e a autenticação com um MySQL real, incluindo registro, rotação,
-revogação, reutilização e limpeza de refresh tokens, além de inserção, consulta
-e limpeza da blacklist.
+de usuários, JWT, CSRF, login e renovação de tokens. Os testes de integração
+validam a conexão PDO, a persistência e a autenticação com um MySQL real,
+incluindo registro, rotação, revogação, reutilização e limpeza de refresh
+tokens, além de inserção, consulta e limpeza da blacklist.
 
 Resultado atual:
 
 ```text
-OK (81 tests, 252 assertions)
+OK (89 tests, 288 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -275,16 +293,33 @@ token já estão implementadas. Os refresh tokens são persistidos com seus
 identificadores protegidos, rotacionados em transações e têm reutilizações
 detectadas com revogação da família. A blacklist persistente também está pronta
 para bloquear tokens ainda válidos. O login já autentica credenciais, gera os
-tokens, vincula o CSRF ao access token e registra o refresh. Vou integrar a
-rotação ao refresh, implementar o logout e aplicar `SameSite` e CORS restrito à
-origem do frontend nos endpoints HTTP.
+tokens, vincula o CSRF ao access token e registra o refresh. A rotação já faz
+parte do service de autenticação: ela valida o refresh atual,
+consulta se o usuário continua ativo, preserva a família, invalida o token
+usado e emite um novo par de tokens com um novo CSRF. Ainda vou implementar o
+logout e aplicar os cookies `HttpOnly`, `SameSite`, a validação CSRF e o CORS
+restrito à origem do frontend na camada HTTP.
+
+## Limitações atuais
+
+A base de domínio, persistência e autenticação está em construção e ainda não
+representa a aplicação completa. Neste momento:
+
+- apenas as rotas técnicas `/` e `/health` estão expostas;
+- ainda não existem controllers, router e middlewares HTTP;
+- a blacklist está persistida, mas será consultada pelo middleware de acesso;
+- os cookies de autenticação, autorização por perfil, CSRF e logout ainda não
+  estão conectados a endpoints;
+- os logs de requisições e exceções ainda não foram implementados;
+- a regra de pedidos, o frontend React e a refatoração legada ainda serão
+  desenvolvidos.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar refresh e logout no service de autenticação;
+- implementar logout no service de autenticação;
 - implementar cadastro e autorização por perfil;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - adicionar validação, logs e tratamento de erros;
