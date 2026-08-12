@@ -62,6 +62,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - rotas protegidas e menu condicionado aos perfis `ADMIN` e `OPERADOR`;
 - layout ERP responsivo inspirado na navegação lateral do AgraTeste;
 - tela inicial, administração de acessos, listagem e formulário de pedidos;
+- busca local e paginação de dez registros nas listas de acessos e pedidos;
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
 - testes do cliente HTTP e build de produção validados com Vitest e TypeScript.
 
@@ -412,7 +413,9 @@ docker compose exec frontend npm run build
 Os testes do frontend confirmam o envio de cookies, o cabeçalho CSRF nas
 operações de escrita, a renovação automática após `401`, o tratamento dos
 erros de validação e a consolidação de requisições simultâneas em uma única
-rotação do refresh token.
+rotação do refresh token. Também validam a busca sem diferença entre acentos
+e letras maiúsculas, a filtragem das listas e a paginação fixa de dez registros
+nas telas de acessos e pedidos.
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
@@ -438,7 +441,7 @@ OK (270 tests, 822 assertions)
 O frontend possui atualmente:
 
 ```text
-6 tests passed
+13 tests passed
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -560,6 +563,12 @@ sessão. O menu de acessos aparece apenas para `ADMIN`, mas essa condição visu
 não substitui a autorização do backend, que continua validando o perfil em
 cada rota administrativa.
 
+As listas de acessos e pedidos possuem busca instantânea e paginação de dez
+registros. A API devolve os registros autorizados e o frontend filtra os dados
+já descriptografados em memória, sem realizar uma nova consulta a cada tecla.
+Por isso, essa busca não utiliza os índices do MySQL. Uma futura paginação no
+servidor será necessária caso o volume de registros cresça significativamente.
+
 ## Limitações atuais
 
 A aplicação atende aos fluxos principais do teste, mas ainda possui limitações:
@@ -567,7 +576,8 @@ A aplicação atende aos fluxos principais do teste, mas ainda possui limitaçõ
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
   completo de usuários e as quatro rotas obrigatórias de pedidos;
 - a refatoração do código PHP legado ainda será desenvolvida;
-- paginação, filtros e busca de pedidos ainda não foram implementados.
+- a busca e a paginação atuais são locais e ainda não foram movidas para o
+  servidor, o que seria necessário para volumes elevados de registros.
 
 ## Próximas etapas
 
