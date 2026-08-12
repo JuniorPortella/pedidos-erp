@@ -265,7 +265,7 @@ http://localhost:18080
 | `POST` | `/auth/logout` | Revoga a sessão com proteção CSRF |
 | `GET` | `/auth/me` | Retorna o usuário autenticado |
 | `GET` | `/usuarios` | Lista usuários; exige perfil `ADMIN` |
-| `POST` | `/usuarios` | Cria usuário; exige `ADMIN` e proteção CSRF |
+| `POST` | `/auth/register` | Cria usuário; exige `ADMIN` e proteção CSRF |
 | `PUT` | `/usuarios/{id}` | Atualiza usuário; exige `ADMIN` e proteção CSRF |
 | `DELETE` | `/usuarios/{id}` | Exclui usuário logicamente; exige `ADMIN` e proteção CSRF |
 | `GET` | `/pedidos` | Lista pedidos; exige autenticação |
@@ -274,6 +274,11 @@ http://localhost:18080
 | `PUT` | `/pedidos/{id}` | Atualiza pedido; exige autenticação e proteção CSRF |
 
 Não implementei `DELETE /pedidos`, conforme solicitado no teste técnico.
+
+Mantive o cadastro de acesso completo e controlado pelo administrador. A rota
+usa o nome `POST /auth/register`, conforme o teste técnico, mas continua
+exigindo uma sessão `ADMIN` e proteção CSRF. O administrador informa nome,
+e-mail, usuário, senha e o perfil `ADMIN` ou `OPERADOR` do novo acesso.
 
 Teste rápido:
 

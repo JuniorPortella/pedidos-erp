@@ -659,7 +659,7 @@ function verifyHttpAuthorization(
         );
 
         [$operatorCreateStatus] = requestJson(
-            $baseUrl . '/usuarios',
+            $baseUrl . '/auth/register',
             'POST',
             [
                 cookieHeader($operatorCookies),
@@ -708,8 +708,38 @@ function verifyHttpAuthorization(
 
         assertAuthenticationCookies($adminCookies);
 
-        [$missingCsrfStatus] = requestJson(
+        [
+            $oldCreateRouteStatus,
+            ,
+            $oldCreateRouteHeaders,
+        ] = requestJson(
             $baseUrl . '/usuarios',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Rota Antiga',
+                'email' => 'rota-antiga@example.test',
+                'usuario' => 'rota_antiga',
+                'senha' => 'SenhaSegura@123',
+                'perfil' => 'OPERADOR',
+            ]
+        );
+
+        assertSmoke(
+            $oldCreateRouteStatus === 405,
+            'POST /usuarios nao deve mais criar usuarios.'
+        );
+        assertSmoke(
+            ($oldCreateRouteHeaders['allow'] ?? null)
+                === 'GET',
+            'POST /usuarios deve informar Allow: GET.'
+        );
+
+        [$missingCsrfStatus] = requestJson(
+            $baseUrl . '/auth/register',
             'POST',
             [cookieHeader($adminCookies)],
             [
@@ -723,11 +753,11 @@ function verifyHttpAuthorization(
 
         assertSmoke(
             $missingCsrfStatus === 403,
-            'POST /usuarios sem CSRF deve responder HTTP 403.'
+            'POST /auth/register sem CSRF deve responder HTTP 403.'
         );
 
         [$weakPasswordStatus, $weakPasswordBody] = requestJson(
-            $baseUrl . '/usuarios',
+            $baseUrl . '/auth/register',
             'POST',
             [
                 cookieHeader($adminCookies),
@@ -744,7 +774,7 @@ function verifyHttpAuthorization(
 
         assertSmoke(
             $weakPasswordStatus === 422,
-            'Senha fraca em POST /usuarios deve responder HTTP 422.'
+            'Senha fraca em POST /auth/register deve responder HTTP 422.'
         );
         assertSmoke(
             isset($weakPasswordBody['fields']['senha']),
@@ -754,7 +784,7 @@ function verifyHttpAuthorization(
         $createdUsername = 'created_operator_' . $suffix;
 
         [$createStatus, $createBody] = requestJson(
-            $baseUrl . '/usuarios',
+            $baseUrl . '/auth/register',
             'POST',
             [
                 cookieHeader($adminCookies),
@@ -781,25 +811,25 @@ function verifyHttpAuthorization(
                 === $createdUsername
             && ($createBody['user']['perfil'] ?? null)
                 === 'OPERADOR',
-            'POST /usuarios retornou usuario inesperado.'
+            'POST /auth/register retornou usuario inesperado.'
         );
         assertSmoke(
             !isset($createBody['user']['senha'])
                 && !isset($createBody['user']['senha_hash']),
-            'POST /usuarios nao deve retornar a senha.'
+            'POST /auth/register nao deve retornar a senha.'
         );
 
         $createdUserId = $createBody['user']['id'] ?? null;
 
         assertSmoke(
             is_int($createdUserId) && $createdUserId > 0,
-            'POST /usuarios nao retornou um id valido.'
+            'POST /auth/register nao retornou um id valido.'
         );
 
         $userIds[] = $createdUserId;
 
         [$duplicateStatus, $duplicateBody] = requestJson(
-            $baseUrl . '/usuarios',
+            $baseUrl . '/auth/register',
             'POST',
             [
                 cookieHeader($adminCookies),

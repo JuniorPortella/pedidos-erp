@@ -97,7 +97,7 @@ return static function (
     );
 
     $router->post(
-        '/usuarios',
+        '/auth/register',
         static fn (
             Request $request,
             array $parameters
