@@ -76,8 +76,46 @@ services:
     networks:
       - pedidos-network
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:18080}
+
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5173"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    networks:
+      - pedidos-network
+
 volumes:
   mysql-data:
+  frontend-node-modules:
 
 networks:
   pedidos-network:
