@@ -1,5 +1,4 @@
 import {
-  AddBoxOutlined,
   ChevronLeft,
   DashboardOutlined,
   Inventory2Outlined,
@@ -46,7 +45,6 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   { label: 'Inicio', path: '/', icon: <DashboardOutlined /> },
   { label: 'Pedidos', path: '/pedidos', icon: <Inventory2Outlined /> },
-  { label: 'Novo pedido', path: '/pedidos/novo', icon: <AddBoxOutlined /> },
   {
     label: 'Acessos',
     path: '/acessos',
@@ -63,12 +61,10 @@ function isNavigationItemSelected(
     return currentPath === '/';
   }
 
-  if (itemPath === '/pedidos/novo') {
-    return currentPath === '/pedidos/novo';
-  }
-
   if (itemPath === '/pedidos') {
-    return currentPath === '/pedidos' || /^\/pedidos\/[1-9][0-9]*$/.test(currentPath);
+    return currentPath === '/pedidos'
+      || currentPath === '/pedidos/novo'
+      || /^\/pedidos\/[1-9][0-9]*$/.test(currentPath);
   }
 
   return currentPath === itemPath || currentPath.startsWith(`${itemPath}/`);

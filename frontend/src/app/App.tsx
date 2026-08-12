@@ -19,11 +19,6 @@ const OrdersPage = lazy(() =>
     default: module.OrdersPage,
   })),
 );
-const OrderFormPage = lazy(() =>
-  import('../pages/OrderFormPage').then((module) => ({
-    default: module.OrderFormPage,
-  })),
-);
 const AccessPage = lazy(() =>
   import('../pages/AccessPage').then((module) => ({
     default: module.AccessPage,
@@ -40,8 +35,20 @@ export function App() {
           <Route element={<AppShell />}>
             <Route index element={<HomePage />} />
             <Route path="pedidos" element={<OrdersPage />} />
-            <Route path="pedidos/novo" element={<OrderFormPage />} />
-            <Route path="pedidos/:id" element={<OrderFormPage />} />
+            <Route
+              path="pedidos/novo"
+              element={(
+                <Navigate
+                  to="/pedidos"
+                  replace
+                  state={{ openNewOrder: true }}
+                />
+              )}
+            />
+            <Route
+              path="pedidos/:id"
+              element={<Navigate to="/pedidos" replace />}
+            />
 
             <Route element={<AdminRoute />}>
               <Route path="acessos" element={<AccessPage />} />

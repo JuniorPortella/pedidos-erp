@@ -1,7 +1,7 @@
 import type { ErrorResponse, ValidationFields } from '../types/api';
 
 const API_URL = (
-  import.meta.env.VITE_API_URL ?? 'http://localhost:18080'
+  import.meta.env.VITE_API_URL ?? 'http://localhost:18081'
 ).replace(/\/$/, '');
 
 const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

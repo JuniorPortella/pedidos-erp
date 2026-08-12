@@ -33,7 +33,9 @@ export function HomePage() {
           <Button
             variant="contained"
             startIcon={<Add />}
-            onClick={() => navigate('/pedidos/novo')}
+            onClick={() => navigate('/pedidos', {
+              state: { openNewOrder: true },
+            })}
           >
             Novo pedido
           </Button>

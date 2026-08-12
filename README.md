@@ -61,7 +61,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - login conectado à API por cookies, CSRF e renovação automática da sessão;
 - rotas protegidas e menu condicionado aos perfis `ADMIN` e `OPERADOR`;
 - layout ERP responsivo inspirado na navegação lateral do AgraTeste;
-- tela inicial, administração de acessos, listagem e formulário de pedidos;
+- tela inicial e páginas unificadas para administração de acessos e pedidos;
 - busca local e paginação de dez registros nas listas de acessos e pedidos;
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
 - cliente HTTP, componentes e fluxos do frontend testados com Vitest;
@@ -260,8 +260,8 @@ das chaves usadas para proteger os dados.
 Configure em `FRONTEND_ORIGIN` a origem exata do frontend, sem barra no final:
 
 ```dotenv
-FRONTEND_ORIGIN=http://localhost:5173
-VITE_API_URL=http://localhost:18080
+FRONTEND_ORIGIN=http://localhost:5174
+VITE_API_URL=http://localhost:18081
 ```
 
 Em produção, essa origem deve utilizar HTTPS. Como a autenticação usa cookies,
@@ -319,13 +319,13 @@ contêiner e não fica disponível como rota pública.
 Deixei a API disponível em:
 
 ```text
-http://localhost:18080
+http://localhost:18081
 ```
 
 Deixei o frontend disponível em:
 
 ```text
-http://localhost:5173
+http://localhost:5174
 ```
 
 É possível alterar as portas por `API_PORT` e `FRONTEND_PORT` no `.env`. A
@@ -364,7 +364,7 @@ O contrato completo da API está versionado em `api/public/openapi.json` e fica
 disponível com a aplicação em execução:
 
 ```text
-http://localhost:18080/openapi.json
+http://localhost:18081/openapi.json
 ```
 
 O arquivo usa OpenAPI 3.1 e descreve rotas, corpos JSON, campos obrigatórios,
@@ -380,7 +380,7 @@ evitando adicionar scripts e dependências desnecessárias à API.
 Teste rápido:
 
 ```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:18080/health
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:18081/health
 ```
 
 Resposta esperada:

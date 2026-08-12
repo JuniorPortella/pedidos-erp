@@ -28,7 +28,7 @@ describe('apiRequest', () => {
     await apiRequest('/pedidos');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:18080/pedidos',
+      'http://localhost:18081/pedidos',
       expect.objectContaining({ credentials: 'include' }),
     );
   });
@@ -63,9 +63,9 @@ describe('apiRequest', () => {
 
     expect(result).toEqual({ orders: [] });
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      'http://localhost:18080/pedidos',
-      'http://localhost:18080/auth/refresh',
-      'http://localhost:18080/pedidos',
+      'http://localhost:18081/pedidos',
+      'http://localhost:18081/auth/refresh',
+      'http://localhost:18081/pedidos',
     ]);
   });
 

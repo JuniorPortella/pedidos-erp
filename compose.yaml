@@ -1,4 +1,4 @@
-name: pedidos-full
+name: pedidos-erp
 
 services:
   mysql:
@@ -38,7 +38,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV}
       APP_DEBUG: ${APP_DEBUG}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5174}
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY}
       DATA_LOOKUP_KEY: ${DATA_LOOKUP_KEY}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
@@ -86,10 +86,10 @@ services:
       dockerfile: Dockerfile
 
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_PORT:-5174}:5173"
 
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:18080}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:18081}
 
     volumes:
       - ./frontend:/app

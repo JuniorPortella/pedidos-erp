@@ -22,7 +22,7 @@ const admin: AuthUser = {
   perfil: 'ADMIN',
 };
 
-function renderShell(path = '/pedidos/novo') {
+function renderShell(path = '/pedidos') {
   render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
@@ -30,8 +30,6 @@ function renderShell(path = '/pedidos/novo') {
         <Route element={<AppShell />}>
           <Route path="/" element={<div>Inicio do sistema</div>} />
           <Route path="/pedidos" element={<div>Lista de pedidos</div>} />
-          <Route path="/pedidos/novo" element={<div>Formulario de pedido</div>} />
-          <Route path="/pedidos/:id" element={<div>Edicao de pedido</div>} />
           <Route path="/acessos" element={<div>Lista de acessos</div>} />
         </Route>
       </Routes>
@@ -46,18 +44,15 @@ describe('AppShell', () => {
     useAuthMock.mockReturnValue({ user: admin, logout: logoutMock });
   });
 
-  it('seleciona somente Novo pedido na rota de cadastro', () => {
+  it('mantem somente a entrada unificada de pedidos no menu', () => {
     renderShell();
 
     const ordersItem = screen
       .getByText('Pedidos')
       .closest('.MuiListItemButton-root');
-    const newOrderItem = screen
-      .getByText('Novo pedido')
-      .closest('.MuiListItemButton-root');
 
-    expect(ordersItem).not.toHaveClass('Mui-selected');
-    expect(newOrderItem).toHaveClass('Mui-selected');
+    expect(ordersItem).toHaveClass('Mui-selected');
+    expect(screen.queryByText('Novo pedido')).not.toBeInTheDocument();
   });
 
   it('oculta a administracao de acessos para operador', () => {

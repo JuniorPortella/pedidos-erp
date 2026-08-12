@@ -1,24 +1,23 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiRequest } from '../lib/api';
+import { ApiError, apiRequest, jsonBody } from '../lib/api';
 import type { Order } from '../types/api';
 import { OrdersPage } from './OrdersPage';
 
-vi.mock('../lib/api', () => ({
-  ApiError: class ApiError extends Error {
-    public constructor(
-      public readonly status: number,
-      message: string,
-    ) {
-      super(message);
-    }
-  },
-  apiRequest: vi.fn(),
-}));
+vi.mock('../lib/api', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../lib/api')>();
+
+  return {
+    ...original,
+    apiRequest: vi.fn(),
+    jsonBody: vi.fn((data: unknown) => JSON.stringify(data)),
+  };
+});
 
 const apiRequestMock = vi.mocked(apiRequest);
+const jsonBodyMock = vi.mocked(jsonBody);
 
 function order(id: number, customerName = `Cliente ${id}`): Order {
   return {
@@ -32,12 +31,11 @@ function order(id: number, customerName = `Cliente ${id}`): Order {
   };
 }
 
-function renderPage() {
+function renderPage(state?: { openNewOrder: boolean }) {
   render(
-    <MemoryRouter initialEntries={['/pedidos']}>
+    <MemoryRouter initialEntries={[{ pathname: '/pedidos', state }]}>
       <Routes>
         <Route path="/pedidos" element={<OrdersPage />} />
-        <Route path="/pedidos/novo" element={<div>Novo pedido aberto</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -46,20 +44,21 @@ function renderPage() {
 describe('OrdersPage', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
+    jsonBodyMock.mockClear();
   });
 
   it('filtra os pedidos no frontend sem diferenciar acentos', async () => {
     apiRequestMock.mockResolvedValue({
-      orders: [order(1, 'João da Silva'), order(2, 'Maria Souza')],
+      orders: [order(1, 'Joao da Silva'), order(2, 'Maria Souza')],
     });
     const user = userEvent.setup();
 
     renderPage();
 
-    await screen.findByText('João da Silva');
+    await screen.findByText('Joao da Silva');
     await user.type(screen.getByRole('searchbox', { name: 'Buscar pedidos' }), 'joao');
 
-    expect(screen.getByText('João da Silva')).toBeInTheDocument();
+    expect(screen.getByText('Joao da Silva')).toBeInTheDocument();
     expect(screen.queryByText('Maria Souza')).not.toBeInTheDocument();
   });
 
@@ -95,8 +94,6 @@ describe('OrdersPage', () => {
   });
 
   it('mostra o erro e permite tentar novamente', async () => {
-    const { ApiError } = await import('../lib/api');
-
     apiRequestMock
       .mockRejectedValueOnce(
         new ApiError(500, 'Nao foi possivel carregar os pedidos.'),
@@ -115,7 +112,7 @@ describe('OrdersPage', () => {
     expect(await screen.findByText('Cliente 1')).toBeInTheDocument();
   });
 
-  it('abre a tela de novo pedido', async () => {
+  it('abre e fecha o formulario na mesma pagina', async () => {
     apiRequestMock.mockResolvedValue({ orders: [] });
     const user = userEvent.setup();
 
@@ -124,6 +121,146 @@ describe('OrdersPage', () => {
     await screen.findByText('Nenhum pedido cadastrado.');
     await user.click(screen.getByRole('button', { name: 'Novo pedido' }));
 
-    expect(screen.getByText('Novo pedido aberto')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Novo pedido' }))
+      .toBeInTheDocument();
+    expect(screen.getByText('Nenhum pedido cadastrado.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.queryByRole('heading', { name: 'Novo pedido' }))
+      .not.toBeInTheDocument();
+  });
+
+  it('abre o formulario pelo atalho recebido na navegacao', async () => {
+    apiRequestMock.mockResolvedValue({ orders: [] });
+
+    renderPage({ openNewOrder: true });
+
+    expect(await screen.findByRole('heading', { name: 'Novo pedido' }))
+      .toBeInTheDocument();
+  });
+
+  it('valida os campos obrigatorios antes de chamar a API', async () => {
+    apiRequestMock.mockResolvedValue({ orders: [] });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('Nenhum pedido cadastrado.');
+    await user.click(screen.getByRole('button', { name: 'Novo pedido' }));
+
+    const form = screen
+      .getByRole('button', { name: 'Salvar pedido' })
+      .closest('form');
+
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(await screen.findByText('Informe o nome do cliente.'))
+      .toBeInTheDocument();
+    expect(screen.getByText('Informe a descricao do pedido.'))
+      .toBeInTheDocument();
+    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cria o pedido e atualiza a lista na mesma pagina', async () => {
+    const createdOrder = order(12, 'Cliente novo');
+
+    apiRequestMock
+      .mockResolvedValueOnce({ orders: [] })
+      .mockResolvedValueOnce({ order: createdOrder })
+      .mockResolvedValueOnce({ orders: [createdOrder] });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('Nenhum pedido cadastrado.');
+    await user.click(screen.getByRole('button', { name: 'Novo pedido' }));
+    await user.type(screen.getByLabelText(/^Cliente/), 'Cliente novo');
+    await user.type(screen.getByLabelText(/^Descricao/), 'Dois produtos');
+    await user.click(screen.getByRole('button', { name: 'Salvar pedido' }));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenNthCalledWith(2, '/pedidos', {
+        method: 'POST',
+        body: JSON.stringify({
+          cliente_nome: 'Cliente novo',
+          descricao: 'Dois produtos',
+          status: 'PENDENTE',
+        }),
+      });
+    });
+    expect(await screen.findByText('Pedido criado com sucesso.'))
+      .toBeInTheDocument();
+    expect(screen.getByText('Cliente novo')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Novo pedido' }))
+      .not.toBeInTheDocument();
+  });
+
+  it('apresenta os erros de validacao devolvidos pela API', async () => {
+    apiRequestMock
+      .mockResolvedValueOnce({ orders: [] })
+      .mockRejectedValueOnce(
+        new ApiError(422, 'Dados invalidos.', {
+          cliente_nome: 'Cliente nao permitido.',
+        }),
+      );
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('Nenhum pedido cadastrado.');
+    await user.click(screen.getByRole('button', { name: 'Novo pedido' }));
+    await user.type(screen.getByLabelText(/^Cliente/), 'Cliente novo');
+    await user.type(screen.getByLabelText(/^Descricao/), 'Descricao');
+    await user.click(screen.getByRole('button', { name: 'Salvar pedido' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Dados invalidos.');
+    expect(screen.getByText('Cliente nao permitido.')).toBeInTheDocument();
+  });
+
+  it('preenche e atualiza um pedido pela lista', async () => {
+    const existingOrder = order(42, 'Cliente existente');
+    existingOrder.descricao = 'Descricao existente';
+    existingOrder.status = 'EM_PROCESSAMENTO';
+
+    const updatedOrder = {
+      ...existingOrder,
+      cliente_nome: 'Cliente atualizado',
+    };
+
+    apiRequestMock
+      .mockResolvedValueOnce({ orders: [existingOrder] })
+      .mockResolvedValueOnce({ order: updatedOrder })
+      .mockResolvedValueOnce({ orders: [updatedOrder] });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('Cliente existente');
+    await user.click(screen.getByRole('button', { name: 'Editar pedido 42' }));
+
+    const customer = screen.getByDisplayValue('Cliente existente');
+    expect(screen.getByDisplayValue('Descricao existente')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Editar pedido #42' }))
+      .toBeInTheDocument();
+
+    await user.clear(customer);
+    await user.type(customer, 'Cliente atualizado');
+    await user.click(screen.getByRole('button', { name: 'Salvar pedido' }));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenNthCalledWith(2, '/pedidos/42', {
+        method: 'PUT',
+        body: JSON.stringify({
+          cliente_nome: 'Cliente atualizado',
+          descricao: 'Descricao existente',
+          status: 'EM_PROCESSAMENTO',
+        }),
+      });
+    });
+    expect(await screen.findByText('Pedido atualizado com sucesso.'))
+      .toBeInTheDocument();
+    expect(screen.getByText('Cliente atualizado')).toBeInTheDocument();
   });
 });

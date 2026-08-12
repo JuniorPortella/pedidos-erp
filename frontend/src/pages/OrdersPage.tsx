@@ -1,4 +1,10 @@
-import { Add, EditOutlined, Refresh } from '@mui/icons-material';
+import {
+  Add,
+  Close,
+  EditOutlined,
+  Refresh,
+  SaveOutlined,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -6,7 +12,9 @@ import {
   Chip,
   CircularProgress,
   IconButton,
+  MenuItem,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -14,18 +22,41 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { SearchField } from '../components/SearchField';
-import { ApiError, apiRequest } from '../lib/api';
+import { ApiError, apiRequest, jsonBody } from '../lib/api';
 import { matchesSearch } from '../lib/search';
-import type { Order, OrderStatus } from '../types/api';
+import type { Order, OrderStatus, ValidationFields } from '../types/api';
 
 const ROWS_PER_PAGE = 10;
+
+interface OrderForm {
+  cliente_nome: string;
+  descricao: string;
+  status: OrderStatus;
+}
+
+interface OrdersLocationState {
+  openNewOrder?: boolean;
+}
+
+const emptyForm: OrderForm = {
+  cliente_nome: '',
+  descricao: '',
+  status: 'PENDENTE',
+};
 
 const statusLabels: Record<OrderStatus, string> = {
   PENDENTE: 'Pendente',
@@ -42,9 +73,16 @@ const statusColors: Record<OrderStatus, 'warning' | 'info' | 'success'> = {
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<OrderForm>(emptyForm);
+  const [fields, setFields] = useState<ValidationFields>({});
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const location = useLocation();
   const navigate = useNavigate();
 
   const filteredOrders = useMemo(
@@ -88,9 +126,27 @@ export function OrdersPage() {
     }
   }, []);
 
+  const openNew = useCallback(() => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFields({});
+    setError(null);
+    setMessage(null);
+    setFormOpen(true);
+  }, []);
+
   useEffect(() => {
     void loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    const state = location.state as OrdersLocationState | null;
+
+    if (state?.openNewOrder) {
+      openNew();
+      navigate('/pedidos', { replace: true, state: null });
+    }
+  }, [location.state, navigate, openNew]);
 
   useEffect(() => {
     const lastPage = Math.max(
@@ -106,11 +162,89 @@ export function OrdersPage() {
     setPage(0);
   };
 
+  const openEdit = (order: Order) => {
+    setEditingId(order.id);
+    setForm({
+      cliente_nome: order.cliente_nome,
+      descricao: order.descricao,
+      status: order.status,
+    });
+    setFields({});
+    setError(null);
+    setMessage(null);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    if (!saving) {
+      setFormOpen(false);
+      setFields({});
+    }
+  };
+
+  const update = (field: keyof OrderForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFields((current) => ({ ...current, [field]: '' }));
+  };
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setMessage(null);
+    setFields({});
+
+    const localErrors: ValidationFields = {};
+
+    if (!form.cliente_nome.trim()) {
+      localErrors.cliente_nome = 'Informe o nome do cliente.';
+    }
+
+    if (!form.descricao.trim()) {
+      localErrors.descricao = 'Informe a descricao do pedido.';
+    }
+
+    if (Object.keys(localErrors).length > 0) {
+      setFields(localErrors);
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await apiRequest(
+        editingId === null ? '/pedidos' : `/pedidos/${editingId}`,
+        {
+          method: editingId === null ? 'POST' : 'PUT',
+          body: jsonBody(form),
+        },
+      );
+
+      setMessage(
+        editingId === null
+          ? 'Pedido criado com sucesso.'
+          : 'Pedido atualizado com sucesso.',
+      );
+      setFormOpen(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      await loadOrders();
+    } catch (saveError) {
+      if (saveError instanceof ApiError) {
+        setError(saveError.message);
+        setFields(saveError.fields);
+      } else {
+        setError('Nao foi possivel salvar o pedido.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
       <PageHeader
         title="Pedidos"
-        description="Consulte os registros e abra um pedido para editar."
+        description="Cadastre pedidos e consulte os registros existentes."
         actions={
           <Box
             sx={{
@@ -129,7 +263,7 @@ export function OrdersPage() {
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => navigate('/pedidos/novo')}
+              onClick={openNew}
               sx={{ whiteSpace: 'nowrap' }}
             >
               Novo pedido
@@ -143,13 +277,102 @@ export function OrdersPage() {
           severity="error"
           sx={{ mb: 2 }}
           action={
-            <Button color="inherit" startIcon={<Refresh />} onClick={() => void loadOrders()}>
-              Tentar novamente
-            </Button>
+            !formOpen ? (
+              <Button
+                color="inherit"
+                startIcon={<Refresh />}
+                onClick={() => void loadOrders()}
+              >
+                Tentar novamente
+              </Button>
+            ) : undefined
           }
         >
           {error}
         </Alert>
+      )}
+      {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
+
+      {formOpen && (
+        <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
+          <Stack component="form" spacing={2} onSubmit={save} noValidate>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="h2">
+                {editingId === null ? 'Novo pedido' : `Editar pedido #${editingId}`}
+              </Typography>
+              <Tooltip title="Fechar formulario">
+                <IconButton
+                  aria-label="Fechar formulario"
+                  sx={{ ml: 'auto' }}
+                  onClick={closeForm}
+                  disabled={saving}
+                >
+                  <Close />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gap: 2,
+              }}
+            >
+              <TextField
+                label="Cliente"
+                value={form.cliente_nome}
+                onChange={(event) => update('cliente_nome', event.target.value)}
+                error={Boolean(fields.cliente_nome)}
+                helperText={fields.cliente_nome}
+                inputProps={{ maxLength: 120 }}
+                required
+                autoFocus
+              />
+
+              <TextField
+                select
+                label="Status"
+                value={form.status}
+                onChange={(event) => update('status', event.target.value)}
+                error={Boolean(fields.status)}
+                helperText={fields.status}
+                required
+              >
+                <MenuItem value="PENDENTE">Pendente</MenuItem>
+                <MenuItem value="EM_PROCESSAMENTO">Em processamento</MenuItem>
+                <MenuItem value="CONCLUIDO">Concluido</MenuItem>
+              </TextField>
+
+              <TextField
+                label="Descricao"
+                value={form.descricao}
+                onChange={(event) => update('descricao', event.target.value)}
+                error={Boolean(fields.descricao)}
+                helperText={fields.descricao}
+                inputProps={{ maxLength: 5000 }}
+                required
+                multiline
+                minRows={4}
+                sx={{ gridColumn: { md: '1 / -1' } }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Button onClick={closeForm} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<SaveOutlined />}
+                disabled={saving}
+              >
+                {saving ? 'Salvando...' : 'Salvar pedido'}
+              </Button>
+            </Box>
+          </Stack>
+        </Paper>
       )}
 
       {loading && (
@@ -195,39 +418,41 @@ export function OrdersPage() {
               </TableHead>
               <TableBody>
                 {visibleOrders.map((order) => (
-                <TableRow hover key={order.id}>
-                  <TableCell>{order.id}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{order.cliente_nome}</TableCell>
-                  <TableCell sx={{ maxWidth: 420 }}>
-                    <Typography noWrap variant="body2">
-                      {order.descricao}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={statusLabels[order.status]}
-                      color={statusColors[order.status]}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {new Intl.DateTimeFormat('pt-BR', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    }).format(new Date(order.created_at))}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Editar pedido">
-                      <IconButton
-                        aria-label={`Editar pedido ${order.id}`}
-                        onClick={() => navigate(`/pedidos/${order.id}`)}
-                      >
-                        <EditOutlined fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
+                  <TableRow hover key={order.id}>
+                    <TableCell>{order.id}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {order.cliente_nome}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 420 }}>
+                      <Typography noWrap variant="body2">
+                        {order.descricao}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={statusLabels[order.status]}
+                        color={statusColors[order.status]}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {new Intl.DateTimeFormat('pt-BR', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      }).format(new Date(order.created_at))}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="Editar pedido">
+                        <IconButton
+                          aria-label={`Editar pedido ${order.id}`}
+                          onClick={() => openEdit(order)}
+                        >
+                          <EditOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
