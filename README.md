@@ -64,7 +64,8 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - tela inicial, administração de acessos, listagem e formulário de pedidos;
 - busca local e paginação de dez registros nas listas de acessos e pedidos;
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
-- testes do cliente HTTP e build de produção validados com Vitest e TypeScript;
+- cliente HTTP, componentes e fluxos do frontend testados com Vitest;
+- build de produção validado pelo TypeScript e Vite;
 - contrato OpenAPI 3.1 publicado e conferido automaticamente com as rotas.
 
 A refatoração do código legado também está entregue separadamente em
@@ -467,15 +468,17 @@ operações de escrita, a renovação automática após `401`, o tratamento dos
 erros de validação e a consolidação de requisições simultâneas em uma única
 rotação do refresh token. Também validam a busca sem diferença entre acentos
 e letras maiúsculas, a filtragem das listas e a paginação fixa de dez registros
-nas telas de acessos e pedidos.
+nas telas de acessos e pedidos. Os testes de componentes cobrem login,
+visibilidade da senha, restauração e proteção da sessão, autorização por perfil,
+navegação do menu, confirmação de logout, cadastro e exclusão de acessos,
+estados das listagens, criação, validação, carregamento e atualização de pedidos.
 
-Atualmente, a suíte possui testes unitários para o contrato OpenAPI, variáveis de ambiente,
-criptografia autenticada, hashes de consulta, entidades, validação e services
-de usuários e pedidos, JWT, CSRF, login, renovação de tokens, request, response,
-router,
-logout, autenticação do access token, autorização por perfil, tratamento de
-erros, comando de criação de administrador, aplicação HTTP, logging e cookies
-de autenticação.
+Atualmente, a suíte possui testes unitários para o contrato OpenAPI, variáveis
+de ambiente, criptografia autenticada, hashes de consulta, entidades, validação
+e services de usuários e pedidos, JWT, CSRF, login, renovação de tokens,
+request, response, router, logout, autenticação do access token, autorização por
+perfil, tratamento de erros, comando de criação de administrador, aplicação
+HTTP, logging e cookies de autenticação.
 Os testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`,
 escopo, expiração, remoção e codificação contra injeção. Os testes de integração
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
@@ -487,13 +490,13 @@ e descrição não são armazenados em texto puro.
 Resultado atual:
 
 ```text
-OK (270 tests, 822 assertions)
+OK (276 tests, 1068 assertions)
 ```
 
 O frontend possui atualmente:
 
 ```text
-13 tests passed
+40 tests passed
 ```
 
 A refatoração do código legado possui:
@@ -639,5 +642,6 @@ A aplicação atende aos fluxos principais do teste, mas ainda possui limitaçõ
 ## Próximas etapas
 
 As três partes obrigatórias do teste estão implementadas. Como melhorias
-futuras, vou ampliar os testes de componentes do frontend e preparar uma
-configuração separada para produção.
+futuras, vou preparar uma configuração separada para produção e mover a busca e
+a paginação para o servidor quando o volume de registros justificar essa
+mudança.

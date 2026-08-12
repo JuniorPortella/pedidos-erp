@@ -6,7 +6,15 @@ import type { User } from '../types/api';
 import { AccessPage } from './AccessPage';
 
 vi.mock('../lib/api', () => ({
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    public constructor(
+      public readonly status: number,
+      message: string,
+      public readonly fields: Record<string, string> = {},
+    ) {
+      super(message);
+    }
+  },
   apiRequest: vi.fn(),
   jsonBody: vi.fn((data: unknown) => JSON.stringify(data)),
 }));
@@ -69,5 +77,79 @@ describe('AccessPage', () => {
     });
     expect(screen.queryByText('Pessoa 1', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('11-11 de 11')).toBeInTheDocument();
+  });
+
+  it('cadastra um novo acesso e recarrega a listagem', async () => {
+    apiRequestMock
+      .mockResolvedValueOnce({ users: [] })
+      .mockResolvedValueOnce({ user: access(1, 'Novo Usuario') })
+      .mockResolvedValueOnce({ users: [access(1, 'Novo Usuario')] });
+    const user = userEvent.setup();
+
+    render(<AccessPage />);
+
+    await screen.findByText('Nenhum acesso cadastrado.');
+    await user.click(screen.getByRole('button', { name: 'Novo cadastro' }));
+    await user.type(screen.getByLabelText(/^Nome/), 'Novo Usuario');
+    await user.type(screen.getByLabelText(/^E-mail/), 'novo@example.com');
+    await user.type(screen.getByLabelText(/^Usuario/), 'novo_usuario');
+    await user.type(screen.getByLabelText(/^Senha/), 'Senha123!');
+    await user.click(screen.getByRole('button', { name: 'Salvar acesso' }));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          nome: 'Novo Usuario',
+          email: 'novo@example.com',
+          usuario: 'novo_usuario',
+          senha: 'Senha123!',
+          perfil: 'OPERADOR',
+        }),
+      });
+    });
+    expect(await screen.findByText('Novo Usuario')).toBeInTheDocument();
+  });
+
+  it('exclui um acesso somente depois da confirmacao', async () => {
+    apiRequestMock
+      .mockResolvedValueOnce({ users: [access(1, 'Usuario removido')] })
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ users: [] });
+    const user = userEvent.setup();
+
+    render(<AccessPage />);
+
+    await screen.findByText('Usuario removido');
+    await user.click(
+      screen.getByRole('button', { name: 'Excluir Usuario removido' }),
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Excluir acesso' }))
+      .toHaveTextContent('Usuario removido');
+
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith('/usuarios/1', {
+        method: 'DELETE',
+      });
+    });
+    expect(await screen.findByText('Nenhum acesso cadastrado.'))
+      .toBeInTheDocument();
+  });
+
+  it('mostra mensagem amigavel quando a listagem falha', async () => {
+    const { ApiError } = await import('../lib/api');
+
+    apiRequestMock.mockRejectedValue(
+      new ApiError(500, 'Nao foi possivel carregar os acessos.'),
+    );
+
+    render(<AccessPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nao foi possivel carregar os acessos.',
+    );
   });
 });

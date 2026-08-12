@@ -1,13 +1,20 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../lib/api';
 import type { Order } from '../types/api';
 import { OrdersPage } from './OrdersPage';
 
 vi.mock('../lib/api', () => ({
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    public constructor(
+      public readonly status: number,
+      message: string,
+    ) {
+      super(message);
+    }
+  },
   apiRequest: vi.fn(),
 }));
 
@@ -27,8 +34,11 @@ function order(id: number, customerName = `Cliente ${id}`): Order {
 
 function renderPage() {
   render(
-    <MemoryRouter>
-      <OrdersPage />
+    <MemoryRouter initialEntries={['/pedidos']}>
+      <Routes>
+        <Route path="/pedidos" element={<OrdersPage />} />
+        <Route path="/pedidos/novo" element={<div>Novo pedido aberto</div>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -73,5 +83,47 @@ describe('OrdersPage', () => {
     });
     expect(screen.queryByText('Cliente 1', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('11-11 de 11')).toBeInTheDocument();
+  });
+
+  it('exibe mensagem quando nao existem pedidos', async () => {
+    apiRequestMock.mockResolvedValue({ orders: [] });
+
+    renderPage();
+
+    expect(await screen.findByText('Nenhum pedido cadastrado.'))
+      .toBeInTheDocument();
+  });
+
+  it('mostra o erro e permite tentar novamente', async () => {
+    const { ApiError } = await import('../lib/api');
+
+    apiRequestMock
+      .mockRejectedValueOnce(
+        new ApiError(500, 'Nao foi possivel carregar os pedidos.'),
+      )
+      .mockResolvedValueOnce({ orders: [order(1)] });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nao foi possivel carregar os pedidos.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+
+    expect(await screen.findByText('Cliente 1')).toBeInTheDocument();
+  });
+
+  it('abre a tela de novo pedido', async () => {
+    apiRequestMock.mockResolvedValue({ orders: [] });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('Nenhum pedido cadastrado.');
+    await user.click(screen.getByRole('button', { name: 'Novo pedido' }));
+
+    expect(screen.getByText('Novo pedido aberto')).toBeInTheDocument();
   });
 });
