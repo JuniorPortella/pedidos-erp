@@ -125,6 +125,36 @@ final class RouterTest extends TestCase
         self::assertSame(200, $response->status());
     }
 
+    public function testDispatchesDeleteRoute(): void
+    {
+        $router = new Router();
+
+        $router->delete(
+            '/usuarios/{id}',
+            static fn (
+                Request $request,
+                array $parameters
+            ): Response => Response::json([
+                'id' => $parameters['id'],
+            ])
+        );
+
+        $response = $router->dispatch(
+            new Request('DELETE', '/usuarios/42')
+        );
+
+        self::assertSame(200, $response->status());
+        self::assertSame(
+            ['id' => '42'],
+            json_decode(
+                $response->body(),
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            )
+        );
+    }
+
     public function testThrowsWhenRouteDoesNotExist(): void
     {
         $router = new Router();

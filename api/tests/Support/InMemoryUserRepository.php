@@ -57,6 +57,70 @@ final class InMemoryUserRepository implements UserRepository
         return null;
     }
 
+    public function update(
+        int $id,
+        string $name,
+        string $email,
+        string $username,
+        ?string $passwordHash,
+        UserProfile $profile,
+        bool $active
+    ): ?User {
+        foreach ($this->users as $index => $user) {
+            if ($user->id !== $id || $user->isDeleted()) {
+                continue;
+            }
+
+            $updatedUser = new User(
+                id: $user->id,
+                name: $name,
+                email: $email,
+                username: $username,
+                profile: $profile,
+                active: $active,
+                createdAt: $user->createdAt,
+                updatedAt: new DateTimeImmutable()
+            );
+
+            $this->users[$index] = $updatedUser;
+
+            if ($passwordHash !== null) {
+                $this->lastPasswordHash = $passwordHash;
+            }
+
+            return $updatedUser;
+        }
+
+        return null;
+    }
+
+    public function softDelete(int $id): bool
+    {
+        foreach ($this->users as $index => $user) {
+            if ($user->id !== $id || $user->isDeleted()) {
+                continue;
+            }
+
+            $now = new DateTimeImmutable();
+
+            $this->users[$index] = new User(
+                id: $user->id,
+                name: $user->name,
+                email: $user->email,
+                username: $user->username,
+                profile: $user->profile,
+                active: false,
+                createdAt: $user->createdAt,
+                updatedAt: $now,
+                deletedAt: $now
+            );
+
+            return true;
+        }
+
+        return false;
+    }
+
     public function findByUsername(string $username): ?User
     {
         foreach ($this->users as $user) {
@@ -71,10 +135,16 @@ final class InMemoryUserRepository implements UserRepository
         return null;
     }
 
-    public function emailExists(string $email): bool
+    public function emailExists(
+        string $email,
+        ?int $exceptUserId = null
+    ): bool
     {
         foreach ($this->users as $user) {
-            if ($user->email === $email) {
+            if (
+                $user->email === $email
+                && $user->id !== $exceptUserId
+            ) {
                 return true;
             }
         }
@@ -82,10 +152,16 @@ final class InMemoryUserRepository implements UserRepository
         return false;
     }
 
-    public function usernameExists(string $username): bool
+    public function usernameExists(
+        string $username,
+        ?int $exceptUserId = null
+    ): bool
     {
         foreach ($this->users as $user) {
-            if ($user->username === $username) {
+            if (
+                $user->username === $username
+                && $user->id !== $exceptUserId
+            ) {
                 return true;
             }
         }

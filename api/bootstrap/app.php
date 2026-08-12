@@ -25,6 +25,8 @@ use App\Security\LookupHasher;
 use App\Service\AuthenticationService;
 use App\Service\CreateUserInputValidator;
 use App\Service\JwtService;
+use App\Service\PasswordPolicy;
+use App\Service\UpdateUserInputValidator;
 use App\Service\UserService;
 
 $logger = LoggerFactory::create();
@@ -88,8 +90,14 @@ $accessTokenMiddleware = new AccessTokenMiddleware(
 $adminAuthorization = new AdminAuthorization();
 
 $userController = new UserController(
-    new UserService($userRepository),
-    new CreateUserInputValidator()
+    new UserService(
+        $userRepository,
+        $refreshTokens
+    ),
+    new CreateUserInputValidator(),
+    new UpdateUserInputValidator(
+        new PasswordPolicy()
+    )
 );
 
 $registerRoutes = require dirname(__DIR__)

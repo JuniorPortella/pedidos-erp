@@ -238,4 +238,95 @@ final class PdoUserRepositoryTest extends TestCase
             $this->repository->usernameExists($username)
         );
     }
+
+    public function testUpdatesAndSoftDeletesUser(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = $this->repository->create(
+            name: 'Usuario Original',
+            email: "original.{$suffix}@example.com",
+            username: "original_{$suffix}",
+            passwordHash: password_hash(
+                'SenhaOriginal@123',
+                PASSWORD_DEFAULT
+            ),
+            profile: UserProfile::Operator
+        );
+
+        $originalPasswordHash = $this->passwordHash($user->id);
+        $updatedEmail = "atualizado.{$suffix}@example.com";
+        $updatedUsername = "atualizado_{$suffix}";
+
+        $updated = $this->repository->update(
+            id: $user->id,
+            name: 'Usuario Atualizado',
+            email: $updatedEmail,
+            username: $updatedUsername,
+            passwordHash: null,
+            profile: UserProfile::Admin,
+            active: false
+        );
+
+        self::assertInstanceOf(User::class, $updated);
+        self::assertSame('Usuario Atualizado', $updated->name);
+        self::assertSame($updatedEmail, $updated->email);
+        self::assertSame($updatedUsername, $updated->username);
+        self::assertSame(UserProfile::Admin, $updated->profile);
+        self::assertFalse($updated->active);
+        self::assertSame(
+            $originalPasswordHash,
+            $this->passwordHash($user->id)
+        );
+        self::assertFalse(
+            $this->repository->emailExists(
+                $updatedEmail,
+                $user->id
+            )
+        );
+        self::assertFalse(
+            $this->repository->usernameExists(
+                $updatedUsername,
+                $user->id
+            )
+        );
+
+        $newPasswordHash = password_hash(
+            'NovaSenha@123',
+            PASSWORD_DEFAULT
+        );
+
+        $this->repository->update(
+            id: $user->id,
+            name: $updated->name,
+            email: $updated->email,
+            username: $updated->username,
+            passwordHash: $newPasswordHash,
+            profile: $updated->profile,
+            active: true
+        );
+
+        self::assertSame(
+            $newPasswordHash,
+            $this->passwordHash($user->id)
+        );
+        self::assertTrue($this->repository->softDelete($user->id));
+        self::assertNull($this->repository->findById($user->id));
+        self::assertFalse($this->repository->softDelete($user->id));
+    }
+
+    private function passwordHash(int $userId): string
+    {
+        $statement = $this->connection->prepare(
+            <<<'SQL'
+            SELECT senha_hash
+            FROM usuarios
+            WHERE id = :id
+            SQL
+        );
+
+        $statement->execute(['id' => $userId]);
+
+        return (string) $statement->fetchColumn();
+    }
 }

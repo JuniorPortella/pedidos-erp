@@ -111,6 +111,77 @@ final class PdoUserRepository implements UserRepository
             : $this->hydrate($row);
     }
 
+    public function update(
+        int $id,
+        string $name,
+        string $email,
+        string $username,
+        ?string $passwordHash,
+        UserProfile $profile,
+        bool $active
+    ): ?User {
+        $statement = $this->connection->prepare(
+            <<<'SQL'
+            UPDATE usuarios
+            SET
+                nome_criptografado = :encrypted_name,
+                email_criptografado = :encrypted_email,
+                email_hash = :email_hash,
+                usuario = :username,
+                senha_hash = COALESCE(
+                    :password_hash,
+                    senha_hash
+                ),
+                perfil = :profile,
+                ativo = :active,
+                updated_at = UTC_TIMESTAMP()
+            WHERE id = :id
+              AND deleted_at IS NULL
+            SQL
+        );
+
+        $statement->execute([
+            'id' => $id,
+            'encrypted_name' => $this->cipher->encrypt(
+                $name,
+                self::NAME_CONTEXT
+            ),
+            'encrypted_email' => $this->cipher->encrypt(
+                $email,
+                self::EMAIL_CONTEXT
+            ),
+            'email_hash' => $this->lookupHasher->hash(
+                $email,
+                self::EMAIL_CONTEXT
+            ),
+            'username' => $username,
+            'password_hash' => $passwordHash,
+            'profile' => $profile->value,
+            'active' => $active ? 1 : 0,
+        ]);
+
+        return $this->findById($id);
+    }
+
+    public function softDelete(int $id): bool
+    {
+        $statement = $this->connection->prepare(
+            <<<'SQL'
+            UPDATE usuarios
+            SET
+                ativo = 0,
+                deleted_at = UTC_TIMESTAMP(),
+                updated_at = UTC_TIMESTAMP()
+            WHERE id = :id
+              AND deleted_at IS NULL
+            SQL
+        );
+
+        $statement->execute(['id' => $id]);
+
+        return $statement->rowCount() === 1;
+    }
+
     public function findByUsername(string $username): ?User
     {
         $statement = $this->connection->prepare(
@@ -141,39 +212,71 @@ final class PdoUserRepository implements UserRepository
             : $this->hydrate($row);
     }
 
-    public function emailExists(string $email): bool
-    {
-        $statement = $this->connection->prepare(
-            <<<'SQL'
-            SELECT 1
-            FROM usuarios
-            WHERE email_hash = :email_hash
-            LIMIT 1
-            SQL
-        );
+    public function emailExists(
+        string $email,
+        ?int $exceptUserId = null
+    ): bool {
+        $sql = $exceptUserId === null
+            ? <<<'SQL'
+              SELECT 1
+              FROM usuarios
+              WHERE email_hash = :email_hash
+              LIMIT 1
+              SQL
+            : <<<'SQL'
+              SELECT 1
+              FROM usuarios
+              WHERE email_hash = :email_hash
+                AND id <> :except_user_id
+              LIMIT 1
+              SQL;
 
-        $statement->execute([
+        $statement = $this->connection->prepare($sql);
+
+        $parameters = [
             'email_hash' => $this->lookupHasher->hash(
                 $email,
                 self::EMAIL_CONTEXT
             ),
-        ]);
+        ];
+
+        if ($exceptUserId !== null) {
+            $parameters['except_user_id'] = $exceptUserId;
+        }
+
+        $statement->execute($parameters);
 
         return $statement->fetchColumn() !== false;
     }
 
-    public function usernameExists(string $username): bool
-    {
-        $statement = $this->connection->prepare(
-            <<<'SQL'
-            SELECT 1
-            FROM usuarios
-            WHERE usuario = :username
-            LIMIT 1
-            SQL
-        );
+    public function usernameExists(
+        string $username,
+        ?int $exceptUserId = null
+    ): bool {
+        $sql = $exceptUserId === null
+            ? <<<'SQL'
+              SELECT 1
+              FROM usuarios
+              WHERE usuario = :username
+              LIMIT 1
+              SQL
+            : <<<'SQL'
+              SELECT 1
+              FROM usuarios
+              WHERE usuario = :username
+                AND id <> :except_user_id
+              LIMIT 1
+              SQL;
 
-        $statement->execute(['username' => $username]);
+        $statement = $this->connection->prepare($sql);
+
+        $parameters = ['username' => $username];
+
+        if ($exceptUserId !== null) {
+            $parameters['except_user_id'] = $exceptUserId;
+        }
+
+        $statement->execute($parameters);
 
         return $statement->fetchColumn() !== false;
     }

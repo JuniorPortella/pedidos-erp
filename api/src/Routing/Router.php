@@ -43,6 +43,13 @@ final class Router
         return $this->add('PUT', $path, $handler);
     }
 
+    public function delete(
+        string $path,
+        callable $handler
+    ): self {
+        return $this->add('DELETE', $path, $handler);
+    }
+
     public function add(
         string $method,
         string $path,

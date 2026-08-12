@@ -39,13 +39,16 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - rota autenticada para consultar a sessão atual;
 - listagem de usuários restrita ao perfil `ADMIN`;
 - criação de usuários restrita ao perfil `ADMIN` e protegida por CSRF;
+- atualização de usuários restrita ao perfil `ADMIN` e protegida por CSRF;
+- exclusão lógica de usuários restrita ao perfil `ADMIN` e protegida por CSRF;
+- proteção contra desativação, exclusão ou remoção do perfil da própria conta;
+- revogação dos refresh tokens ao trocar a senha, desativar ou excluir um usuário;
 - comando de terminal para criar administradores sem cadastro público;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar atualização e exclusão de usuários pela API, pedidos e
-frontend.
+Ainda vou implementar as regras de pedidos e o frontend.
 
 ## Estrutura
 
@@ -77,7 +80,8 @@ PedidosFull/
 |   |   |   |-- AuthenticationResult.php   # Resultado do login e refresh
 |   |   |   |-- CreateUserInput.php        # Dados validados do cadastro
 |   |   |   |-- IssuedToken.php            # Token emitido e seus metadados
-|   |   |   `-- TokenClaims.php            # Claims validadas do token
+|   |   |   |-- TokenClaims.php            # Claims validadas do token
+|   |   |   `-- UpdateUserInput.php        # Dados validados da atualização
 |   |   |-- Entity/
 |   |   |   |-- TokenRevocationReason.php  # Motivos de revogação
 |   |   |   |-- TokenType.php              # Tipos access e refresh
@@ -92,6 +96,7 @@ PedidosFull/
 |   |   |   |-- RefreshTokenNotActiveException.php
 |   |   |   |-- RefreshTokenReuseException.php
 |   |   |   |-- RouteNotFoundException.php
+|   |   |   |-- UserNotFoundException.php
 |   |   |   `-- ValidationException.php
 |   |   |-- Http/                         # Entrada e saída HTTP da aplicação
 |   |   |-- Logging/                      # Configuração do Monolog
@@ -114,6 +119,8 @@ PedidosFull/
 |   |       |-- AuthenticationService.php   # Regras de autenticação
 |   |       |-- CreateUserInputValidator.php
 |   |       |-- JwtService.php              # Emissão e validação de JWT
+|   |       |-- PasswordPolicy.php           # Política compartilhada de senha
+|   |       |-- UpdateUserInputValidator.php
 |   |       `-- UserService.php             # Regras de usuários
 |   |-- tests/
 |   |   |-- Unit/                         # Testes isolados
@@ -246,6 +253,8 @@ http://localhost:18080
 | `GET` | `/auth/me` | Retorna o usuário autenticado |
 | `GET` | `/usuarios` | Lista usuários; exige perfil `ADMIN` |
 | `POST` | `/usuarios` | Cria usuário; exige `ADMIN` e proteção CSRF |
+| `PUT` | `/usuarios/{id}` | Atualiza usuário; exige `ADMIN` e proteção CSRF |
+| `DELETE` | `/usuarios/{id}` | Exclui usuário logicamente; exige `ADMIN` e proteção CSRF |
 
 Teste rápido:
 
@@ -276,7 +285,7 @@ docker compose exec api composer test:integration
 docker compose exec api composer test:smoke
 ```
 
-O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 404 e 405,
+O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 204, 404 e 405,
 incluindo o cabeçalho `Allow`, e confirma que essas respostas públicas não
 criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
 migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
@@ -285,9 +294,10 @@ também cria usuários temporários para confirmar autenticação obrigatória,
 bloqueio de token inválido ou revogado, acesso comum do `OPERADOR`, bloqueio do
 `OPERADOR` em rota administrativa e acesso permitido ao `ADMIN`. Ele também
 valida a criação administrativa de usuário, política de senha, proteção CSRF e
-duplicidade de e-mail e usuário. Os registros temporários e seus tokens são
-removidos ao final da execução. Para executar PHPUnit e o smoke test em
-sequência:
+duplicidade de e-mail e usuário. Também valida atualização, troca de senha,
+exclusão lógica, revogação da sessão e proteção da própria conta do
+administrador. Os registros temporários e seus tokens são removidos ao final
+da execução. Para executar PHPUnit e o smoke test em sequência:
 
 ```bash
 docker compose exec api composer check
@@ -308,7 +318,7 @@ tokens, além de inserção, consulta e limpeza da blacklist.
 Resultado atual:
 
 ```text
-OK (194 tests, 629 assertions)
+OK (222 tests, 698 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -372,14 +382,22 @@ desativação e mudança de perfil têm efeito sem esperar o JWT expirar. A
 autorização administrativa compara o perfil atual com `ADMIN`. Ainda vou
 restringir o CORS à origem do frontend.
 
+Na administração de usuários, uma troca de senha, desativação ou exclusão
+lógica revoga os refresh tokens do usuário afetado. O access token continua
+limitado à sua duração de 15 minutos, enquanto usuários desativados ou
+excluídos são bloqueados imediatamente pela consulta ao banco feita em cada
+requisição protegida. Também impeço o
+administrador autenticado de desativar ou excluir a própria conta e de remover
+o próprio perfil `ADMIN`, evitando que ele interrompa acidentalmente o próprio
+acesso administrativo.
+
 ## Limitações atuais
 
 A base de domínio, persistência e autenticação está em construção e ainda não
 representa a aplicação completa. Neste momento:
 
-- estão expostas as rotas técnicas, de autenticação e a listagem administrativa
-  e criação de usuários;
-- atualização e exclusão de usuários ainda não estão expostas;
+- estão expostas as rotas técnicas, de autenticação e o cadastro administrativo
+  completo de usuários;
 - o CORS ainda não está restrito à origem do frontend;
 - a regra de pedidos, o frontend React e a refatoração legada ainda serão
   desenvolvidos.
@@ -388,7 +406,6 @@ representa a aplicação completa. Neste momento:
 
 Meus próximos passos são:
 
-- implementar atualização e exclusão lógica de usuários;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - ampliar os testes unitários e criar testes de integração dos endpoints;
 - desenvolver o frontend em React com Material UI;

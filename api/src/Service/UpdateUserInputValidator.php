@@ -4,22 +4,21 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Dto\CreateUserInput;
+use App\Dto\UpdateUserInput;
 use App\Entity\UserProfile;
 use App\Exception\ValidationException;
 
-final class CreateUserInputValidator
+final readonly class UpdateUserInputValidator
 {
     public function __construct(
-        private readonly PasswordPolicy $passwordPolicy =
-            new PasswordPolicy()
+        private PasswordPolicy $passwordPolicy
     ) {
     }
 
     /**
      * @param array<string, mixed> $data
      */
-    public function validate(array $data): CreateUserInput
+    public function validate(array $data): UpdateUserInput
     {
         $name = $this->readTrimmedString($data, 'nome');
 
@@ -33,18 +32,22 @@ final class CreateUserInputValidator
             'UTF-8'
         );
 
-        $passwordValue = $data['senha'] ?? null;
-        $password = is_string($passwordValue)
-            ? $passwordValue
-            : '';
-
-        $profileValue = array_key_exists('perfil', $data)
-            ? strtoupper(
+        $profile = UserProfile::tryFrom(
+            strtoupper(
                 $this->readTrimmedString($data, 'perfil')
             )
-            : UserProfile::Operator->value;
+        );
 
-        $profile = UserProfile::tryFrom($profileValue);
+        $activeValue = $data['ativo'] ?? null;
+        $active = is_bool($activeValue)
+            ? $activeValue
+            : null;
+
+        $passwordValue = $data['senha'] ?? null;
+        $password = is_string($passwordValue)
+            && $passwordValue !== ''
+                ? $passwordValue
+                : null;
 
         $errors = [];
 
@@ -76,9 +79,23 @@ final class CreateUserInputValidator
                 'O usuario deve possuir entre 3 e 60 caracteres e usar apenas letras, numeros, ponto, hifen ou sublinhado.';
         }
 
-        if ($password === '') {
-            $errors['senha'] = 'Informe a senha.';
-        } else {
+        if ($profile === null) {
+            $errors['perfil'] =
+                'O perfil deve ser ADMIN ou OPERADOR.';
+        }
+
+        if ($active === null) {
+            $errors['ativo'] =
+                'O campo ativo deve ser verdadeiro ou falso.';
+        }
+
+        if (
+            array_key_exists('senha', $data)
+            && !is_string($passwordValue)
+            && $passwordValue !== null
+        ) {
+            $errors['senha'] = 'Informe uma senha valida.';
+        } elseif ($password !== null) {
             $passwordError = $this->passwordPolicy
                 ->validationError($password);
 
@@ -87,21 +104,17 @@ final class CreateUserInputValidator
             }
         }
 
-        if ($profile === null) {
-            $errors['perfil'] =
-                'O perfil deve ser ADMIN ou OPERADOR.';
-        }
-
         if ($errors !== []) {
             throw new ValidationException($errors);
         }
 
-        return new CreateUserInput(
+        return new UpdateUserInput(
             name: $name,
             email: $email,
             username: $username,
             password: $password,
-            profile: $profile
+            profile: $profile,
+            active: $active
         );
     }
 

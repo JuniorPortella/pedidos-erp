@@ -119,4 +119,65 @@ return static function (
             }
         )
     );
+
+    $router->put(
+        '/usuarios/{id}',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $parameters,
+                $csrf,
+                $adminAuthorization,
+                $users
+            ): Response {
+                $csrf->validate($request);
+
+                $adminAuthorization->authorize(
+                    $authenticatedUser
+                );
+
+                return $users->update(
+                    $request,
+                    $parameters['id'],
+                    $authenticatedUser
+                );
+            }
+        )
+    );
+
+    $router->delete(
+        '/usuarios/{id}',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $parameters,
+                $csrf,
+                $adminAuthorization,
+                $users
+            ): Response {
+                $csrf->validate($request);
+
+                $adminAuthorization->authorize(
+                    $authenticatedUser
+                );
+
+                return $users->delete(
+                    $parameters['id'],
+                    $authenticatedUser
+                );
+            }
+        )
+    );
 };

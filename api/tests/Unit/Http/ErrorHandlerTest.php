@@ -14,6 +14,7 @@ use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
 use App\Exception\UnauthenticatedException;
+use App\Exception\UserNotFoundException;
 use App\Exception\ValidationException;
 use App\Http\ErrorHandler;
 use App\Http\Request;
@@ -126,6 +127,13 @@ final class ErrorHandlerTest extends TestCase
                 ),
                 404,
                 'Rota nao encontrada.',
+            ],
+            'user not found' => [
+                new UserNotFoundException(
+                    'Detalhe interno.'
+                ),
+                404,
+                'Usuario nao encontrado.',
             ],
         ];
     }

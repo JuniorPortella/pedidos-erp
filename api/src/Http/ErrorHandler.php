@@ -14,6 +14,7 @@ use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
 use App\Exception\UnauthenticatedException;
+use App\Exception\UserNotFoundException;
 use App\Exception\ValidationException;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -117,6 +118,15 @@ final readonly class ErrorHandler
             return Response::json(
                 [
                     'error' => 'Rota nao encontrada.',
+                ],
+                404
+            );
+        }
+
+        if ($exception instanceof UserNotFoundException) {
+            return Response::json(
+                [
+                    'error' => 'Usuario nao encontrado.',
                 ],
                 404
             );

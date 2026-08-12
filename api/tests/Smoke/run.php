@@ -314,12 +314,14 @@ function requestJson(
         );
     }
 
-    $decodedBody = json_decode(
-        $body,
-        true,
-        512,
-        JSON_THROW_ON_ERROR
-    );
+    $decodedBody = trim($body) === ''
+        ? []
+        : json_decode(
+            $body,
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
 
     if (!is_array($decodedBody)) {
         throw new RuntimeException(
@@ -647,6 +649,202 @@ function verifyHttpAuthorization(
             isset($duplicateBody['fields']['email'])
                 && isset($duplicateBody['fields']['usuario']),
             'Duplicidade deve identificar email e usuario.'
+        );
+
+        [$operatorUpdateStatus] = requestJson(
+            $baseUrl . '/usuarios/' . $createdUserId,
+            'PUT',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Alteracao Indevida',
+                'email' => 'alteracao-indevida@example.test',
+                'usuario' => 'alteracao_indevida',
+                'perfil' => 'ADMIN',
+                'ativo' => true,
+            ]
+        );
+
+        assertSmoke(
+            $operatorUpdateStatus === 403,
+            'OPERADOR nao deve atualizar usuarios.'
+        );
+
+        [$operatorDeleteStatus] = requestJson(
+            $baseUrl . '/usuarios/' . $createdUserId,
+            'DELETE',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ]
+        );
+
+        assertSmoke(
+            $operatorDeleteStatus === 403,
+            'OPERADOR nao deve excluir usuarios.'
+        );
+
+        [$updateWithoutCsrfStatus] = requestJson(
+            $baseUrl . '/usuarios/' . $createdUserId,
+            'PUT',
+            [cookieHeader($adminCookies)],
+            [
+                'nome' => 'Sem CSRF',
+                'email' => 'update-sem-csrf@example.test',
+                'usuario' => 'update_sem_csrf',
+                'perfil' => 'OPERADOR',
+                'ativo' => true,
+            ]
+        );
+
+        assertSmoke(
+            $updateWithoutCsrfStatus === 403,
+            'PUT /usuarios/{id} sem CSRF deve responder HTTP 403.'
+        );
+
+        [$selfDeactivateStatus, $selfDeactivateBody] = requestJson(
+            $baseUrl . '/usuarios/' . $admin->id,
+            'PUT',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => $admin->name,
+                'email' => $admin->email,
+                'usuario' => $admin->username,
+                'perfil' => 'ADMIN',
+                'ativo' => false,
+            ]
+        );
+
+        assertSmoke(
+            $selfDeactivateStatus === 422,
+            'ADMIN nao deve desativar a propria conta.'
+        );
+        assertSmoke(
+            isset($selfDeactivateBody['fields']['ativo']),
+            'Autodesativacao deve retornar erro no campo ativo.'
+        );
+
+        $updatedUsername = 'updated_operator_' . $suffix;
+        $updatedPassword = 'NovaSenha@123';
+
+        [$updateStatus, $updateBody] = requestJson(
+            $baseUrl . '/usuarios/' . $createdUserId,
+            'PUT',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Operador Atualizado',
+                'email' => sprintf(
+                    'updated-%s@example.test',
+                    $suffix
+                ),
+                'usuario' => $updatedUsername,
+                'senha' => $updatedPassword,
+                'perfil' => 'OPERADOR',
+                'ativo' => true,
+            ]
+        );
+
+        assertSmoke(
+            $updateStatus === 200,
+            'ADMIN deve atualizar usuario com HTTP 200.'
+        );
+        assertSmoke(
+            ($updateBody['user']['usuario'] ?? null)
+                === $updatedUsername
+            && ($updateBody['user']['nome'] ?? null)
+                === 'Operador Atualizado',
+            'PUT /usuarios/{id} retornou dados inesperados.'
+        );
+
+        [
+            $updatedLoginStatus,
+            ,
+            ,
+            $updatedLoginHeaders,
+        ] = requestJson(
+            $baseUrl . '/auth/login',
+            'POST',
+            jsonBody: [
+                'usuario' => $updatedUsername,
+                'senha' => $updatedPassword,
+            ]
+        );
+
+        assertSmoke(
+            $updatedLoginStatus === 200,
+            'Usuario atualizado deve autenticar com a nova senha.'
+        );
+
+        $updatedCookies = extractCookies(
+            $updatedLoginHeaders
+        );
+
+        assertAuthenticationCookies($updatedCookies);
+
+        [$selfDeleteStatus, $selfDeleteBody] = requestJson(
+            $baseUrl . '/usuarios/' . $admin->id,
+            'DELETE',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ]
+        );
+
+        assertSmoke(
+            $selfDeleteStatus === 422,
+            'ADMIN nao deve excluir a propria conta.'
+        );
+        assertSmoke(
+            isset($selfDeleteBody['fields']['id']),
+            'Autoexclusao deve retornar erro no campo id.'
+        );
+
+        [$deleteStatus, $deleteBody] = requestJson(
+            $baseUrl . '/usuarios/' . $createdUserId,
+            'DELETE',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ]
+        );
+
+        assertSmoke(
+            $deleteStatus === 204 && $deleteBody === [],
+            'ADMIN deve excluir usuario com HTTP 204.'
+        );
+
+        [$deletedSessionStatus] = requestJson(
+            $baseUrl . '/auth/me',
+            requestHeaders: [cookieHeader($updatedCookies)]
+        );
+
+        assertSmoke(
+            $deletedSessionStatus === 401,
+            'Usuario excluido nao deve manter acesso a API.'
+        );
+
+        [$deleteAgainStatus] = requestJson(
+            $baseUrl . '/usuarios/' . $createdUserId,
+            'DELETE',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ]
+        );
+
+        assertSmoke(
+            $deleteAgainStatus === 404,
+            'Usuario ja excluido deve responder HTTP 404.'
         );
 
         [$adminUsersStatus, $adminUsersBody] = requestJson(
