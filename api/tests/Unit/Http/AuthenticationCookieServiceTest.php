@@ -93,7 +93,7 @@ final class AuthenticationCookieServiceTest extends TestCase
             $cookies[2]
         );
         self::assertStringContainsString(
-            'Max-Age=900; SameSite=Lax',
+            'Max-Age=86400; SameSite=Lax',
             $cookies[2]
         );
         self::assertStringNotContainsString(
@@ -254,7 +254,7 @@ final class AuthenticationCookieServiceTest extends TestCase
         self::assertStringContainsString(
             'Expires=' . gmdate(
                 DATE_RFC7231,
-                1_700_000_000 + 900
+                1_700_000_000 + 86400
             ),
             $cookies[2]
         );

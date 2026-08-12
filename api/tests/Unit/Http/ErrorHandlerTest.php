@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Http;
 
 use App\Exception\InvalidCredentialsException;
+use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
 use App\Exception\MethodNotAllowedException;
@@ -81,6 +82,13 @@ final class ErrorHandlerTest extends TestCase
                 ),
                 401,
                 'Usuario ou senha invalidos.',
+            ],
+            'invalid CSRF token' => [
+                new InvalidCsrfTokenException(
+                    'Detalhe interno.'
+                ),
+                403,
+                'Token CSRF invalido.',
             ],
             'invalid token' => [
                 new InvalidTokenException(

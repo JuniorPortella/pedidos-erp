@@ -93,6 +93,78 @@ try {
     );
     writeSuccess('API rejeitou um metodo HTTP nao permitido');
 
+    [
+        $loginStatus,
+        $loginBody,
+        $loginHeaders,
+    ] = requestJson(
+        $baseUrl . '/auth/login',
+        'POST'
+    );
+
+    assertSmoke(
+        $loginStatus === 422,
+        'POST /auth/login sem credenciais deve responder HTTP 422.'
+    );
+    assertSmoke(
+        isset($loginBody['fields']['usuario'])
+            && isset($loginBody['fields']['senha']),
+        'Login vazio deve informar os campos invalidos.'
+    );
+    assertSmoke(
+        !isset($loginHeaders['set-cookie']),
+        'Login invalido nao deve criar cookies.'
+    );
+    writeSuccess('Rota de login validou as credenciais');
+
+    [
+        $refreshStatus,
+        $refreshBody,
+        $refreshHeaders,
+    ] = requestJson(
+        $baseUrl . '/auth/refresh',
+        'POST'
+    );
+
+    assertSmoke(
+        $refreshStatus === 403,
+        'POST /auth/refresh sem CSRF deve responder HTTP 403.'
+    );
+    assertSmoke(
+        ($refreshBody['error'] ?? null)
+            === 'Token CSRF invalido.',
+        'Refresh sem CSRF retornou uma mensagem inesperada.'
+    );
+    assertSmoke(
+        !isset($refreshHeaders['set-cookie']),
+        'Refresh sem CSRF nao deve alterar cookies.'
+    );
+    writeSuccess('Rota de refresh exigiu protecao CSRF');
+
+    [
+        $logoutStatus,
+        $logoutBody,
+        $logoutHeaders,
+    ] = requestJson(
+        $baseUrl . '/auth/logout',
+        'POST'
+    );
+
+    assertSmoke(
+        $logoutStatus === 403,
+        'POST /auth/logout sem CSRF deve responder HTTP 403.'
+    );
+    assertSmoke(
+        ($logoutBody['error'] ?? null)
+            === 'Token CSRF invalido.',
+        'Logout sem CSRF retornou uma mensagem inesperada.'
+    );
+    assertSmoke(
+        !isset($logoutHeaders['set-cookie']),
+        'Logout sem CSRF nao deve alterar cookies.'
+    );
+    writeSuccess('Rota de logout exigiu protecao CSRF');
+
     $connection = ConnectionFactory::create();
     $databaseVersion = $connection
         ->query('SELECT VERSION()')

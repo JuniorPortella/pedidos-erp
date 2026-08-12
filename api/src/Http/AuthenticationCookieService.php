@@ -51,9 +51,9 @@ final class AuthenticationCookieService
                 $authentication->csrfToken,
                 '/',
                 false,
-                $authentication->accessToken->expiresAt,
-                $authentication->accessToken->expiresAt
-                    - $authentication->accessToken->issuedAt
+                $authentication->refreshToken->expiresAt,
+                $authentication->refreshToken->expiresAt
+                    - $authentication->refreshToken->issuedAt
             );
         }
 

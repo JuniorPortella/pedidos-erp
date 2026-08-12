@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Exception\InvalidCredentialsException;
+use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
 use App\Exception\MethodNotAllowedException;
@@ -53,6 +54,15 @@ final readonly class ErrorHandler
                     'error' => 'Usuario ou senha invalidos.',
                 ],
                 401
+            );
+        }
+
+        if ($exception instanceof InvalidCsrfTokenException) {
+            return Response::json(
+                [
+                    'error' => 'Token CSRF invalido.',
+                ],
+                403
             );
         }
 
