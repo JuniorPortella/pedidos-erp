@@ -27,14 +27,14 @@ final class CreateUserInputValidatorTest extends TestCase
             'nome' => '  Vagner Portella  ',
             'email' => '  VAGNER@EXAMPLE.COM  ',
             'usuario' => '  Vagner.Portella  ',
-            'senha' => ' Senha123 ',
+            'senha' => ' Senha@123 ',
             'perfil' => ' admin ',
         ]);
 
         self::assertSame('Vagner Portella', $input->name);
         self::assertSame('vagner@example.com', $input->email);
         self::assertSame('vagner.portella', $input->username);
-        self::assertSame(' Senha123 ', $input->password);
+        self::assertSame(' Senha@123 ', $input->password);
         self::assertSame(UserProfile::Admin, $input->profile);
     }
 
@@ -124,14 +124,39 @@ final class CreateUserInputValidatorTest extends TestCase
                 'O usuario deve possuir entre 3 e 60 caracteres e usar apenas letras, numeros, ponto, hifen ou sublinhado.',
             ],
             'short password' => [
-                ['senha' => '1234567'],
+                ['senha' => 'Aa1@5678'],
                 'senha',
-                'A senha deve possuir pelo menos 8 caracteres.',
+                'A senha deve possuir mais de 8 caracteres.',
             ],
             'password too long' => [
                 ['senha' => str_repeat('a', 73)],
                 'senha',
                 'A senha deve possuir no maximo 72 bytes.',
+            ],
+            'missing uppercase letter' => [
+                ['senha' => 'senha@123'],
+                'senha',
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.',
+            ],
+            'missing lowercase letter' => [
+                ['senha' => 'SENHA@123'],
+                'senha',
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.',
+            ],
+            'missing number' => [
+                ['senha' => 'Senha@Teste'],
+                'senha',
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.',
+            ],
+            'missing special character' => [
+                ['senha' => 'Senha12345'],
+                'senha',
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.',
+            ],
+            'space is not a special character' => [
+                ['senha' => 'Senha 123'],
+                'senha',
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.',
             ],
             'invalid profile' => [
                 ['perfil' => 'GERENTE'],
@@ -150,7 +175,7 @@ final class CreateUserInputValidatorTest extends TestCase
             'nome' => 'Vagner Portella',
             'email' => 'vagner@example.com',
             'usuario' => 'vagner',
-            'senha' => 'Senha123',
+            'senha' => 'Senha@123',
             'perfil' => 'OPERADOR',
         ];
     }

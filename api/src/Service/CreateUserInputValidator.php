@@ -72,12 +72,20 @@ final class CreateUserInputValidator
 
         if ($password === '') {
             $errors['senha'] = 'Informe a senha.';
-        } elseif (mb_strlen($password, 'UTF-8') < 8) {
+        } elseif (mb_strlen($password, 'UTF-8') <= 8) {
             $errors['senha'] =
-                'A senha deve possuir pelo menos 8 caracteres.';
+                'A senha deve possuir mais de 8 caracteres.';
         } elseif (strlen($password) > 72) {
             $errors['senha'] =
                 'A senha deve possuir no maximo 72 bytes.';
+        } elseif (
+            preg_match('/\p{Lu}/u', $password) !== 1
+            || preg_match('/\p{Ll}/u', $password) !== 1
+            || preg_match('/\p{N}/u', $password) !== 1
+            || preg_match('/[\p{P}\p{S}]/u', $password) !== 1
+        ) {
+            $errors['senha'] =
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.';
         }
 
         if ($profile === null) {

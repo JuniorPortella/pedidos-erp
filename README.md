@@ -218,9 +218,11 @@ docker compose exec api php bin/create-admin.php
 
 O comando solicita nome, e-mail, usuário, senha e confirmação. A senha fica
 oculta durante a digitação, não é recebida como argumento do processo e é
-armazenada somente como hash. O perfil é sempre definido como `ADMIN`. O mesmo
-comando pode criar outro administrador quando necessário, mas exige acesso ao
-servidor ou ao contêiner e não fica disponível como rota pública.
+armazenada somente como hash. A senha deve possuir mais de oito caracteres e
+conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere
+especial. O perfil é sempre definido como `ADMIN`. O mesmo comando pode criar
+outro administrador quando necessário, mas exige acesso ao servidor ou ao
+contêiner e não fica disponível como rota pública.
 
 Deixei a API disponível em:
 
@@ -302,7 +304,7 @@ tokens, além de inserção, consulta e limpeza da blacklist.
 Resultado atual:
 
 ```text
-OK (186 tests, 614 assertions)
+OK (192 tests, 620 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:

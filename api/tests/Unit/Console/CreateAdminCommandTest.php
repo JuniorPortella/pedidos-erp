@@ -34,7 +34,7 @@ final class CreateAdminCommandTest extends TestCase
             'nome' => '  Administrador Master  ',
             'email' => '  ADMIN@EXAMPLE.COM  ',
             'usuario' => '  Admin.Master  ',
-            'senha' => 'SenhaSegura123',
+            'senha' => 'SenhaSegura@123',
         ]);
 
         self::assertSame('Administrador Master', $user->name);
@@ -44,7 +44,7 @@ final class CreateAdminCommandTest extends TestCase
         self::assertTrue($user->active);
         self::assertTrue(
             password_verify(
-                'SenhaSegura123',
+                'SenhaSegura@123',
                 (string) $this->repository->lastPasswordHash()
             )
         );
@@ -56,7 +56,7 @@ final class CreateAdminCommandTest extends TestCase
             'nome' => 'Administrador',
             'email' => 'admin@example.com',
             'usuario' => 'admin',
-            'senha' => 'SenhaSegura123',
+            'senha' => 'SenhaSegura@123',
             'perfil' => 'OPERADOR',
         ]);
 
@@ -91,13 +91,34 @@ final class CreateAdminCommandTest extends TestCase
         }
     }
 
+    public function testRejectsWeakAdminPassword(): void
+    {
+        try {
+            $this->command->execute([
+                'nome' => 'Administrador',
+                'email' => 'admin@example.com',
+                'usuario' => 'admin',
+                'senha' => 'senhafraca',
+            ]);
+
+            self::fail(
+                'Era esperada uma ValidationException.'
+            );
+        } catch (ValidationException $exception) {
+            self::assertSame(
+                'A senha deve conter uma letra maiuscula, uma minuscula, um numero e um caractere especial.',
+                $exception->errors()['senha'] ?? null
+            );
+        }
+    }
+
     public function testRejectsDuplicateUsernameAndEmail(): void
     {
         $data = [
             'nome' => 'Administrador',
             'email' => 'admin@example.com',
             'usuario' => 'admin',
-            'senha' => 'SenhaSegura123',
+            'senha' => 'SenhaSegura@123',
         ];
 
         $this->command->execute($data);
