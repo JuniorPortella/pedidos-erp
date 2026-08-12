@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http;
 
+use App\Middleware\CorsMiddleware;
 use App\Routing\Router;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -13,7 +14,8 @@ final readonly class Application
     public function __construct(
         private Router $router,
         private ErrorHandler $errorHandler,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private ?CorsMiddleware $cors = null
     ) {
     }
 
@@ -22,14 +24,28 @@ final readonly class Application
         $startedAt = hrtime(true);
 
         try {
-            $response = $this->router->dispatch(
-                $request
-            );
+            $dispatch = fn (): Response =>
+                $this->router->dispatch($request);
+
+            $response = $this->cors === null
+                ? $dispatch()
+                : $this->cors->handle(
+                    $request,
+                    $dispatch
+                );
         } catch (Throwable $exception) {
             $response = $this->errorHandler->handle(
                 $exception,
                 $request
             );
+
+            if ($this->cors !== null) {
+                $response = $this->cors
+                    ->addHeadersToError(
+                        $request,
+                        $response
+                    );
+            }
         }
 
         $durationInMilliseconds = round(

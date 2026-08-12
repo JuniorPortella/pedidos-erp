@@ -26,6 +26,10 @@ try {
         '/'
     );
 
+    $frontendOrigin = Environment::getRequired(
+        'FRONTEND_ORIGIN'
+    );
+
     [$healthStatus, $healthBody, $healthHeaders] = requestJson(
         $baseUrl . '/health'
     );
@@ -43,7 +47,129 @@ try {
         !isset($healthHeaders['set-cookie']),
         'GET /health nao deve criar cookies.'
     );
+    assertSmoke(
+        !isset(
+            $healthHeaders['access-control-allow-origin']
+        ),
+        'Requisicao sem Origin nao deve receber headers CORS.'
+    );
     writeSuccess('API respondeu ao healthcheck');
+
+    [
+        $corsStatus,
+        ,
+        $corsHeaders,
+    ] = requestJson(
+        $baseUrl . '/health',
+        requestHeaders: [
+            'Origin: ' . $frontendOrigin,
+        ]
+    );
+
+    assertSmoke(
+        $corsStatus === 200,
+        'Origem permitida deve acessar GET /health.'
+    );
+    assertSmoke(
+        ($corsHeaders['access-control-allow-origin'] ?? null)
+            === $frontendOrigin,
+        'CORS deve devolver somente a origem configurada.'
+    );
+    assertSmoke(
+        ($corsHeaders['access-control-allow-credentials']
+            ?? null) === 'true',
+        'CORS deve permitir o envio de cookies.'
+    );
+    assertSmoke(
+        ($corsHeaders['vary'] ?? null) === 'Origin',
+        'Resposta CORS deve variar pela origem.'
+    );
+    assertSmoke(
+        !isset($corsHeaders['set-cookie']),
+        'GET /health com CORS nao deve criar cookies.'
+    );
+    writeSuccess('CORS permitiu somente a origem configurada');
+
+    [
+        $preflightStatus,
+        $preflightBody,
+        $preflightHeaders,
+    ] = requestJson(
+        $baseUrl . '/pedidos',
+        'OPTIONS',
+        [
+            'Origin: ' . $frontendOrigin,
+            'Access-Control-Request-Method: POST',
+            'Access-Control-Request-Headers: Content-Type, X-CSRF-Token',
+        ]
+    );
+
+    assertSmoke(
+        $preflightStatus === 204
+            && $preflightBody === [],
+        'Preflight valido deve responder HTTP 204 sem corpo.'
+    );
+    assertSmoke(
+        ($preflightHeaders['access-control-allow-methods']
+            ?? null) === 'GET, POST, PUT, DELETE, OPTIONS',
+        'Preflight deve informar os metodos permitidos.'
+    );
+    assertSmoke(
+        ($preflightHeaders['access-control-allow-headers']
+            ?? null) === 'Content-Type, X-CSRF-Token',
+        'Preflight deve informar os headers permitidos.'
+    );
+    assertSmoke(
+        ($preflightHeaders['access-control-max-age']
+            ?? null) === '600',
+        'Preflight deve informar o tempo de cache.'
+    );
+    assertSmoke(
+        !isset($preflightHeaders['set-cookie']),
+        'Preflight nao deve criar cookies.'
+    );
+    writeSuccess('CORS respondeu ao preflight sem autenticar');
+
+    [
+        $deniedOriginStatus,
+        $deniedOriginBody,
+        $deniedOriginHeaders,
+    ] = requestJson(
+        $baseUrl . '/health',
+        requestHeaders: [
+            'Origin: https://malicioso.example',
+        ]
+    );
+
+    assertSmoke(
+        $deniedOriginStatus === 403
+            && isset($deniedOriginBody['error']),
+        'Origem nao permitida deve responder HTTP 403.'
+    );
+    assertSmoke(
+        !isset(
+            $deniedOriginHeaders[
+                'access-control-allow-origin'
+            ]
+        ),
+        'Origem rejeitada nao deve receber permissao CORS.'
+    );
+
+    [$deniedHeaderStatus] = requestJson(
+        $baseUrl . '/pedidos',
+        'OPTIONS',
+        [
+            'Origin: ' . $frontendOrigin,
+            'Access-Control-Request-Method: GET',
+            'Access-Control-Request-Headers: Authorization',
+        ]
+    );
+
+    assertSmoke(
+        $deniedHeaderStatus === 403,
+        'Header CORS nao permitido deve responder HTTP 403.'
+    );
+    writeSuccess('CORS bloqueou origem e headers nao permitidos');
 
     [
         $notFoundStatus,

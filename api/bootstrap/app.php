@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Config\AuthConfig;
+use App\Config\CorsConfig;
 use App\Config\Environment;
 use App\Controller\AuthenticationController;
 use App\Controller\OrderController;
@@ -15,6 +16,7 @@ use App\Http\ErrorHandler;
 use App\Logging\LoggerFactory;
 use App\Middleware\AccessTokenMiddleware;
 use App\Middleware\AdminAuthorization;
+use App\Middleware\CorsMiddleware;
 use App\Repository\PdoAuthenticationRepository;
 use App\Repository\PdoOrderRepository;
 use App\Repository\PdoRefreshTokenRepository;
@@ -37,6 +39,9 @@ $logger = LoggerFactory::create();
 $router = new Router();
 $connection = ConnectionFactory::create();
 $authConfig = AuthConfig::fromEnvironment();
+$corsMiddleware = new CorsMiddleware(
+    CorsConfig::fromEnvironment()
+);
 
 $lookupHasher = new LookupHasher(
     Environment::getRequired('DATA_LOOKUP_KEY')
@@ -140,5 +145,6 @@ $registerRoutes(
 return new Application(
     router: $router,
     errorHandler: new ErrorHandler($logger),
-    logger: $logger
+    logger: $logger,
+    cors: $corsMiddleware
 );

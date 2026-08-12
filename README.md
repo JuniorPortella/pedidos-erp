@@ -32,6 +32,8 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - serviço de cookies de autenticação com atributos de segurança testados;
 - controller de autenticação para login, refresh e logout;
 - proteção CSRF por cookie e header nos endpoints sensíveis;
+- CORS restrito à origem configurada para o frontend;
+- preflight `OPTIONS` validado sem exigir autenticação;
 - rotas HTTP de login, refresh e logout conectadas;
 - autenticação de rotas pelo access token armazenado em cookie;
 - consulta da blacklist e do usuário ativo em cada requisição protegida;
@@ -70,6 +72,7 @@ PedidosFull/
 |   |-- src/
 |   |   |-- Config/
 |   |   |   |-- AuthConfig.php             # Configuração segura da autenticação
+|   |   |   |-- CorsConfig.php             # Origem permitida no CORS
 |   |   |   `-- Environment.php            # Leitura e validação do ambiente
 |   |   |-- Console/
 |   |   |   `-- CreateAdminCommand.php     # Regra do comando administrativo
@@ -210,6 +213,15 @@ Gere mais duas chaves com o mesmo comando para `JWT_ACCESS_SECRET` e
 token de um dia. As chaves dos tokens também devem ser diferentes entre si e
 das chaves usadas para proteger os dados.
 
+Configure em `FRONTEND_ORIGIN` a origem exata do frontend, sem barra no final:
+
+```dotenv
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+Em produção, essa origem deve utilizar HTTPS. Como a autenticação usa cookies,
+o frontend deverá enviar `credentials: 'include'` nas requisições HTTP.
+
 Suba a API e o MySQL:
 
 ```bash
@@ -309,8 +321,8 @@ docker compose exec api composer test:integration
 docker compose exec api composer test:smoke
 ```
 
-O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 204, 404 e 405,
-incluindo o cabeçalho `Allow`, e confirma que essas respostas públicas não
+O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 204, 403,
+404 e 405, incluindo o cabeçalho `Allow`, e confirma que essas respostas não
 criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
 migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
 em uma transação temporária para validar a revogação e a blacklist. O smoke
@@ -323,7 +335,13 @@ exclusão lógica, revogação da sessão e proteção da própria conta do
 administrador. Para pedidos, testa autenticação, CSRF, validação, criação por
 `OPERADOR`, listagem, detalhe, atualização, resposta `404` e a ausência do
 endpoint `DELETE`. Os registros temporários, pedidos e tokens são removidos ao
-final da execução. Para executar PHPUnit e o smoke test em sequência:
+final da execução.
+
+O smoke também envia requisições como um navegador: confirma a origem
+permitida, o preflight `OPTIONS`, cookies habilitados, cache do preflight e o
+bloqueio de origens e headers não autorizados.
+
+Para executar PHPUnit e o smoke test em sequência:
 
 ```bash
 docker compose exec api composer check
@@ -331,7 +349,8 @@ docker compose exec api composer check
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
-de usuários e pedidos, JWT, CSRF, login, renovação de tokens, request, response, router,
+de usuários e pedidos, JWT, CSRF, login, renovação de tokens, request, response,
+router,
 logout, autenticação do access token, autorização por perfil, tratamento de
 erros, comando de criação de administrador, aplicação HTTP, logging e cookies
 de autenticação.
@@ -346,7 +365,7 @@ e descrição não são armazenados em texto puro.
 Resultado atual:
 
 ```text
-OK (241 tests, 744 assertions)
+OK (258 tests, 777 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -413,8 +432,7 @@ logout já estão conectados à camada HTTP com cookies `HttpOnly`, `SameSite` e
 validação CSRF por double-submit. Nas rotas protegidas, o middleware valida o
 access token, consulta a blacklist e carrega o usuário atual do banco. Assim,
 desativação e mudança de perfil têm efeito sem esperar o JWT expirar. A
-autorização administrativa compara o perfil atual com `ADMIN`. Ainda vou
-restringir o CORS à origem do frontend.
+autorização administrativa compara o perfil atual com `ADMIN`.
 
 Na administração de usuários, uma troca de senha, desativação ou exclusão
 lógica revoga os refresh tokens do usuário afetado. O access token continua
@@ -425,6 +443,12 @@ administrador autenticado de desativar ou excluir a própria conta e de remover
 o próprio perfil `ADMIN`, evitando que ele interrompa acidentalmente o próprio
 acesso administrativo.
 
+O CORS devolve `Access-Control-Allow-Origin` somente quando o header `Origin`
+corresponde exatamente a `FRONTEND_ORIGIN`. Também habilita credenciais para os
+cookies `HttpOnly`, aceita apenas os métodos usados pela API e limita os
+headers enviados pelo frontend a `Content-Type` e `X-CSRF-Token`. Não uso o
+curinga `*`, pois ele não deve ser combinado com cookies de autenticação.
+
 ## Limitações atuais
 
 A base de domínio, persistência e autenticação está em construção e ainda não
@@ -432,7 +456,6 @@ representa a aplicação completa. Neste momento:
 
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
   completo de usuários e as quatro rotas obrigatórias de pedidos;
-- o CORS ainda não está restrito à origem do frontend;
 - o frontend React e a refatoração legada ainda serão desenvolvidos;
 - paginação, filtros e busca de pedidos ainda não foram implementados.
 
@@ -440,6 +463,5 @@ representa a aplicação completa. Neste momento:
 
 Meus próximos passos são:
 
-- restringir o CORS à origem configurada para o frontend;
 - desenvolver o frontend em React com Material UI;
 - refatorar o código PHP legado fornecido no teste.

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http;
 
+use App\Config\CorsConfig;
 use App\Http\Application;
 use App\Http\ErrorHandler;
 use App\Http\Request;
 use App\Http\Response;
+use App\Middleware\CorsMiddleware;
 use App\Routing\Router;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
@@ -141,11 +143,40 @@ final class ApplicationTest extends TestCase
         );
     }
 
+    public function testAddsCorsHeadersToErrorResponse(): void
+    {
+        [$application] = $this->createApplication(
+            new Router(),
+            new CorsMiddleware(
+                new CorsConfig('http://localhost:5173')
+            )
+        );
+
+        $response = $application->handle(
+            new Request(
+                'GET',
+                '/nao-existe',
+                headers: [
+                    'origin' => 'http://localhost:5173',
+                ]
+            )
+        );
+
+        self::assertSame(404, $response->status());
+        self::assertSame(
+            ['http://localhost:5173'],
+            $response->headerValues(
+                'Access-Control-Allow-Origin'
+            )
+        );
+    }
+
     /**
      * @return array{Application, TestHandler}
      */
     private function createApplication(
-        Router $router
+        Router $router,
+        ?CorsMiddleware $cors = null
     ): array {
         $logHandler = new TestHandler();
 
@@ -158,7 +189,8 @@ final class ApplicationTest extends TestCase
             new Application(
                 $router,
                 $errorHandler,
-                $logger
+                $logger,
+                $cors
             ),
             $logHandler,
         ];
