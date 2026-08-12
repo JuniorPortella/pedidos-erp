@@ -11,7 +11,12 @@ import {
   AppBar,
   Avatar,
   Box,
+  Button,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
   IconButton,
   List,
@@ -50,10 +55,30 @@ const navigationItems: NavigationItem[] = [
   },
 ];
 
+function isNavigationItemSelected(
+  itemPath: string,
+  currentPath: string,
+): boolean {
+  if (itemPath === '/') {
+    return currentPath === '/';
+  }
+
+  if (itemPath === '/pedidos/novo') {
+    return currentPath === '/pedidos/novo';
+  }
+
+  if (itemPath === '/pedidos') {
+    return currentPath === '/pedidos' || /^\/pedidos\/[1-9][0-9]*$/.test(currentPath);
+  }
+
+  return currentPath === itemPath || currentPath.startsWith(`${itemPath}/`);
+}
+
 export function AppShell() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [open, setOpen] = useState(!isMobile);
+  const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -81,6 +106,7 @@ export function AppShell() {
 
     try {
       await logout();
+      setLogoutConfirmationOpen(false);
       navigate('/login', { replace: true });
     } finally {
       setLoggingOut(false);
@@ -122,11 +148,10 @@ export function AppShell() {
 
       <List sx={{ px: 1, py: 2 }}>
         {items.map((item) => {
-          const selected =
-            item.path === '/'
-              ? location.pathname === '/'
-              : location.pathname === item.path ||
-                location.pathname.startsWith(`${item.path}/`);
+          const selected = isNavigationItemSelected(
+            item.path,
+            location.pathname,
+          );
 
           return (
             <Tooltip
@@ -184,7 +209,7 @@ export function AppShell() {
         )}
         <Tooltip title={open ? '' : 'Sair'} placement="right">
           <ListItemButton
-            onClick={() => void handleLogout()}
+            onClick={() => setLogoutConfirmationOpen(true)}
             disabled={loggingOut}
             sx={{ color: '#ffb4b4', px: 1.5 }}
           >
@@ -263,6 +288,39 @@ export function AppShell() {
       >
         <Outlet />
       </Box>
+
+      <Dialog
+        open={logoutConfirmationOpen}
+        onClose={() => {
+          if (!loggingOut) {
+            setLogoutConfirmationOpen(false);
+          }
+        }}
+        aria-labelledby="logout-dialog-title"
+        aria-describedby="logout-dialog-description"
+      >
+        <DialogTitle id="logout-dialog-title">Sair do sistema</DialogTitle>
+        <DialogContent id="logout-dialog-description">
+          Deseja realmente encerrar sua sessao?
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setLogoutConfirmationOpen(false)}
+            disabled={loggingOut}
+          >
+            Cancelar
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
+            startIcon={<Logout />}
+          >
+            {loggingOut ? 'Saindo...' : 'Sair'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
