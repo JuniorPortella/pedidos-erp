@@ -66,7 +66,8 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
 - testes do cliente HTTP e build de produção validados com Vitest e TypeScript.
 
-Ainda vou implementar a refatoração do código legado.
+A refatoração do código legado também está entregue separadamente em
+`/refatoracao`, com prepared statement, camadas, logs e testes próprios.
 
 ## Estrutura
 
@@ -173,7 +174,14 @@ PedidosFull/
 |   |-- Dockerfile
 |   |-- package.json
 |   `-- vite.config.ts
-|-- refatoracao/                          # Refatoração do PHP legado
+|-- refatoracao/                          # Parte 2 entregue separadamente
+|   |-- database/schema.sql               # Modelo mínimo do exercício legado
+|   |-- public/index.php                  # Entrada HTTP refatorada
+|   |-- src/                              # Banco, HTTP, logs, repository e service
+|   |-- tests/Unit/                       # Testes isolados da inserção e das camadas
+|   |-- composer.json
+|   |-- phpunit.xml
+|   `-- README.md                         # Decisões e execução da Parte 2
 |-- .env.example
 |-- compose.yaml
 `-- README.md
@@ -410,6 +418,27 @@ docker compose exec frontend npm test
 docker compose exec frontend npm run build
 ```
 
+Para instalar as dependências e executar separadamente os testes da refatoração:
+
+```bash
+docker compose run --rm --no-deps \
+    --user "$(id -u):$(id -g)" \
+    -e COMPOSER_HOME=/tmp/composer \
+    -v "$PWD/refatoracao:/var/www/html" \
+    api \
+    composer install --no-interaction --prefer-dist
+
+docker compose run --rm --no-deps \
+    -v "$PWD/refatoracao:/var/www/html" \
+    api \
+    composer test
+```
+
+A Parte 2 possui documentação própria em `refatoracao/README.md`. Seus testes
+confirmam a separação em camadas, validação, respostas HTTP, logs e o uso de
+prepared statement, incluindo uma tentativa de SQL Injection tratada somente
+como dado.
+
 Os testes do frontend confirmam o envio de cookies, o cabeçalho CSRF nas
 operações de escrita, a renovação automática após `401`, o tratamento dos
 erros de validação e a consolidação de requisições simultâneas em uma única
@@ -442,6 +471,12 @@ O frontend possui atualmente:
 
 ```text
 13 tests passed
+```
+
+A refatoração do código legado possui:
+
+```text
+OK (10 tests, 32 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -575,11 +610,11 @@ A aplicação atende aos fluxos principais do teste, mas ainda possui limitaçõ
 
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
   completo de usuários e as quatro rotas obrigatórias de pedidos;
-- a refatoração do código PHP legado ainda será desenvolvida;
 - a busca e a paginação atuais são locais e ainda não foram movidas para o
   servidor, o que seria necessário para volumes elevados de registros.
 
 ## Próximas etapas
 
-Meu próximo passo é refatorar o código PHP legado fornecido no teste. Depois,
-vou ampliar os testes de componentes do frontend e revisar a entrega completa.
+As três partes obrigatórias do teste estão implementadas. Como melhorias
+futuras, vou ampliar os testes de componentes do frontend, adicionar OpenAPI e
+preparar uma configuração separada para produção.
