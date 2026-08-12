@@ -72,6 +72,42 @@ try {
     );
     writeSuccess('API respondeu ao healthcheck');
 
+    [
+        $openApiStatus,
+        $openApiBody,
+        $openApiHeaders,
+    ] = requestJson(
+        $baseUrl . '/openapi.json'
+    );
+
+    assertSmoke(
+        $openApiStatus === 200,
+        'GET /openapi.json deve responder HTTP 200.'
+    );
+    assertSmoke(
+        ($openApiBody['openapi'] ?? null) === '3.1.0'
+            && ($openApiBody['info']['title'] ?? null)
+                === 'PedidosFull API',
+        'O contrato OpenAPI retornou metadados inesperados.'
+    );
+    assertSmoke(
+        isset($openApiBody['paths']['/pedidos']['get'])
+            && isset($openApiBody['paths']['/pedidos']['post']),
+        'O contrato OpenAPI nao documentou as rotas de pedidos.'
+    );
+    assertSmoke(
+        str_starts_with(
+            strtolower($openApiHeaders['content-type'] ?? ''),
+            'application/json'
+        ),
+        'O contrato OpenAPI deve usar Content-Type application/json.'
+    );
+    assertSmoke(
+        !isset($openApiHeaders['set-cookie']),
+        'GET /openapi.json nao deve criar cookies.'
+    );
+    writeSuccess('Contrato OpenAPI esta publicado e acessivel');
+
     [$unsupportedMediaTypeStatus] = requestJson(
         $baseUrl . '/auth/login',
         'POST',

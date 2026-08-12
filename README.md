@@ -64,7 +64,8 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - tela inicial, administração de acessos, listagem e formulário de pedidos;
 - busca local e paginação de dez registros nas listas de acessos e pedidos;
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
-- testes do cliente HTTP e build de produção validados com Vitest e TypeScript.
+- testes do cliente HTTP e build de produção validados com Vitest e TypeScript;
+- contrato OpenAPI 3.1 publicado e conferido automaticamente com as rotas.
 
 A refatoração do código legado também está entregue separadamente em
 `/refatoracao`, com prepared statement, camadas, logs e testes próprios.
@@ -80,7 +81,9 @@ PedidosFull/
 |   |   `-- migrate.php                   # Comando de migrations
 |   |-- database/migrations/              # Alterações versionadas do banco
 |   |-- docker/apache/                    # VirtualHost do Apache
-|   |-- public/index.php                  # Ponto de entrada da API
+|   |-- public/
+|   |   |-- index.php                    # Ponto de entrada da API
+|   |   `-- openapi.json                 # Contrato HTTP em OpenAPI 3.1
 |   |-- routes/api.php                    # Registro das rotas HTTP
 |   |-- src/
 |   |   |-- Config/
@@ -354,6 +357,25 @@ usa o nome `POST /auth/register`, conforme o teste técnico, mas continua
 exigindo uma sessão `ADMIN` e proteção CSRF. O administrador informa nome,
 e-mail, usuário, senha e o perfil `ADMIN` ou `OPERADOR` do novo acesso.
 
+## Contrato OpenAPI
+
+O contrato completo da API está versionado em `api/public/openapi.json` e fica
+disponível com a aplicação em execução:
+
+```text
+http://localhost:18080/openapi.json
+```
+
+O arquivo usa OpenAPI 3.1 e descreve rotas, corpos JSON, campos obrigatórios,
+respostas, códigos HTTP, cookies de autenticação, proteção CSRF e permissões
+administrativas. Ele pode ser aberto diretamente ou importado em ferramentas
+compatíveis, como Swagger Editor, Postman e Insomnia.
+
+OpenAPI é o padrão que define o contrato legível por pessoas e programas.
+Swagger é o conjunto de ferramentas que pode editar ou apresentar esse
+contrato. O projeto publica o contrato OpenAPI, mas não incorpora Swagger UI,
+evitando adicionar scripts e dependências desnecessárias à API.
+
 Teste rápido:
 
 ```bash
@@ -385,7 +407,8 @@ docker compose exec api composer test:smoke
 
 O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 204, 403,
 404, 405 e 415, incluindo o cabeçalho `Allow`, e confirma que essas respostas não
-criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
+criam cookies. Também confirma que o contrato OpenAPI está publicado como JSON.
+Ele consulta o MySQL com PDO, confirma que não há
 migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
 em uma transação temporária para validar a revogação e a blacklist. O smoke
 também cria usuários temporários para confirmar autenticação obrigatória,
@@ -446,7 +469,7 @@ rotação do refresh token. Também validam a busca sem diferença entre acentos
 e letras maiúsculas, a filtragem das listas e a paginação fixa de dez registros
 nas telas de acessos e pedidos.
 
-Atualmente, a suíte possui testes unitários para variáveis de ambiente,
+Atualmente, a suíte possui testes unitários para o contrato OpenAPI, variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários e pedidos, JWT, CSRF, login, renovação de tokens, request, response,
 router,
@@ -616,5 +639,5 @@ A aplicação atende aos fluxos principais do teste, mas ainda possui limitaçõ
 ## Próximas etapas
 
 As três partes obrigatórias do teste estão implementadas. Como melhorias
-futuras, vou ampliar os testes de componentes do frontend, adicionar OpenAPI e
-preparar uma configuração separada para produção.
+futuras, vou ampliar os testes de componentes do frontend e preparar uma
+configuração separada para produção.

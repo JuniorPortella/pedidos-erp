@@ -1,0 +1,757 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PedidosFull API",
+    "version": "1.0.0",
+    "description": "API de autenticacao, administracao de acessos e gerenciamento de pedidos. A autenticacao utiliza cookies HttpOnly e as operacoes de escrita exigem o header X-CSRF-Token com o mesmo valor do cookie csrf_token.",
+    "license": {
+      "name": "Proprietary",
+      "identifier": "LicenseRef-Proprietary"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Mesmo host que publicou o contrato"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Saude",
+      "description": "Disponibilidade da API."
+    },
+    {
+      "name": "Autenticacao",
+      "description": "Login, sessao, renovacao e logout."
+    },
+    {
+      "name": "Usuarios",
+      "description": "Administracao de acessos restrita ao perfil ADMIN."
+    },
+    {
+      "name": "Pedidos",
+      "description": "Criacao e consulta de pedidos autenticados."
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["Saude"],
+        "summary": "Confirma que a API esta ativa",
+        "operationId": "rootHealth",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/HealthResponse"
+          },
+          "403": { "$ref": "#/components/responses/CorsForbidden" }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Saude"],
+        "summary": "Executa o healthcheck da API",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/HealthResponse"
+          },
+          "403": { "$ref": "#/components/responses/CorsForbidden" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Autenticacao"],
+        "summary": "Autentica um usuario",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login realizado. Define os cookies access_token, refresh_token e csrf_token.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Cookies de autenticacao e CSRF.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/InvalidCredentials" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Autenticacao"],
+        "summary": "Renova a sessao e rotaciona o refresh token",
+        "operationId": "refresh",
+        "security": [
+          {
+            "refreshCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessao renovada e novos cookies emitidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/InvalidCsrf" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Autenticacao"],
+        "summary": "Encerra a sessao e revoga os tokens",
+        "operationId": "logout",
+        "security": [
+          {
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sessao encerrada e cookies removidos."
+          },
+          "403": { "$ref": "#/components/responses/InvalidCsrf" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Autenticacao"],
+        "summary": "Retorna o usuario da sessao atual",
+        "operationId": "currentUser",
+        "security": [
+          { "accessCookie": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usuario autenticado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" }
+        }
+      }
+    },
+    "/usuarios": {
+      "get": {
+        "tags": ["Usuarios"],
+        "summary": "Lista os usuarios cadastrados",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "listUsers",
+        "security": [
+          { "accessCookie": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de usuarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["users"],
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/User" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Usuarios"],
+        "summary": "Cadastra um usuario",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "createUser",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateUserInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuario cadastrado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/usuarios/{id}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/UserId" }
+      ],
+      "put": {
+        "tags": ["Usuarios"],
+        "summary": "Atualiza um usuario",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "updateUser",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateUserInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Usuario atualizado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      },
+      "delete": {
+        "tags": ["Usuarios"],
+        "summary": "Exclui logicamente um usuario",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "deleteUser",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "204": { "description": "Usuario excluido." },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/pedidos": {
+      "get": {
+        "tags": ["Pedidos"],
+        "summary": "Lista os pedidos",
+        "operationId": "listOrders",
+        "security": [
+          { "accessCookie": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de pedidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["orders"],
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Order" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" }
+        }
+      },
+      "post": {
+        "tags": ["Pedidos"],
+        "summary": "Cria um pedido",
+        "operationId": "createOrder",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OrderInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pedido criado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/InvalidCsrf" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/pedidos/{id}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/OrderId" }
+      ],
+      "get": {
+        "tags": ["Pedidos"],
+        "summary": "Consulta um pedido",
+        "operationId": "getOrder",
+        "security": [
+          { "accessCookie": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedido encontrado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      },
+      "put": {
+        "tags": ["Pedidos"],
+        "summary": "Atualiza um pedido",
+        "operationId": "updateOrder",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OrderInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pedido atualizado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/InvalidCsrf" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "accessCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "access_token",
+        "description": "Access token JWT armazenado em cookie HttpOnly."
+      },
+      "refreshCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "refresh_token",
+        "description": "Refresh token JWT armazenado em cookie HttpOnly com Path=/auth."
+      },
+      "csrfCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "csrf_token",
+        "description": "Token CSRF legivel pelo frontend."
+      },
+      "csrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "Deve repetir o valor do cookie csrf_token nas operacoes de escrita."
+      }
+    },
+    "parameters": {
+      "UserId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Identificador do usuario.",
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "OrderId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Identificador do pedido.",
+        "schema": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "schemas": {
+      "UserProfile": {
+        "type": "string",
+        "enum": ["ADMIN", "OPERADOR"]
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": ["PENDENTE", "EM_PROCESSAMENTO", "CONCLUIDO"]
+      },
+      "AuthUser": {
+        "type": "object",
+        "required": ["id", "nome", "email", "usuario", "perfil"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "nome": { "type": "string", "maxLength": 120 },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "usuario": { "type": "string", "minLength": 3, "maxLength": 60 },
+          "perfil": { "$ref": "#/components/schemas/UserProfile" }
+        }
+      },
+      "User": {
+        "allOf": [
+          { "$ref": "#/components/schemas/AuthUser" },
+          {
+            "type": "object",
+            "required": ["ativo", "criado_em", "atualizado_em"],
+            "properties": {
+              "ativo": { "type": "boolean" },
+              "criado_em": { "type": "string", "format": "date-time" },
+              "atualizado_em": { "type": "string", "format": "date-time" }
+            }
+          }
+        ]
+      },
+      "LoginInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["usuario", "senha"],
+        "properties": {
+          "usuario": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60,
+            "pattern": "^[a-zA-Z0-9._-]+$"
+          },
+          "senha": { "type": "string", "format": "password", "maxLength": 72 }
+        }
+      },
+      "CreateUserInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nome", "email", "usuario", "senha", "perfil"],
+        "properties": {
+          "nome": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "usuario": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60,
+            "pattern": "^[a-z0-9._-]+$"
+          },
+          "senha": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 72,
+            "description": "Deve conter letra maiuscula, minuscula, numero e caractere especial."
+          },
+          "perfil": { "$ref": "#/components/schemas/UserProfile" }
+        }
+      },
+      "UpdateUserInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nome", "email", "usuario", "perfil", "ativo"],
+        "properties": {
+          "nome": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "usuario": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60,
+            "pattern": "^[a-z0-9._-]+$"
+          },
+          "senha": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 72,
+            "description": "Opcional. Quando ausente ou vazia, mantem a senha atual."
+          },
+          "perfil": { "$ref": "#/components/schemas/UserProfile" },
+          "ativo": { "type": "boolean" }
+        }
+      },
+      "OrderInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cliente_nome", "descricao", "status"],
+        "properties": {
+          "cliente_nome": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "descricao": { "type": "string", "minLength": 1, "maxLength": 5000 },
+          "status": { "$ref": "#/components/schemas/OrderStatus" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "required": ["id", "cliente_nome", "descricao", "status", "criado_por", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "cliente_nome": { "type": "string", "maxLength": 120 },
+          "descricao": { "type": "string", "maxLength": 5000 },
+          "status": { "$ref": "#/components/schemas/OrderStatus" },
+          "criado_por": { "type": "integer", "minimum": 1 },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthUserResponse": {
+        "type": "object",
+        "required": ["user"],
+        "properties": {
+          "user": { "$ref": "#/components/schemas/AuthUser" }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "required": ["user"],
+        "properties": {
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "OrderResponse": {
+        "type": "object",
+        "required": ["order"],
+        "properties": {
+          "order": { "$ref": "#/components/schemas/Order" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string" }
+        }
+      },
+      "ValidationError": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Error" },
+          {
+            "type": "object",
+            "required": ["fields"],
+            "properties": {
+              "fields": {
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              }
+            }
+          }
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "required": ["service", "status"],
+        "properties": {
+          "service": { "type": "string", "const": "pedidos-api" },
+          "status": { "type": "string", "const": "ok" }
+        }
+      }
+    },
+    "responses": {
+      "HealthResponse": {
+        "description": "API ativa.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Health" }
+          }
+        }
+      },
+      "InvalidJson": {
+        "description": "Corpo JSON invalido.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "InvalidCredentials": {
+        "description": "Usuario ou senha invalidos.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "Unauthenticated": {
+        "description": "Sessao ausente, invalida ou expirada.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Perfil sem permissao para a operacao.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "CorsForbidden": {
+        "description": "Origem da requisicao nao permitida pelo CORS.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "InvalidCsrf": {
+        "description": "Cookie ou header CSRF ausente ou invalido.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Registro nao encontrado.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Campos invalidos.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ValidationError" }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "Corpo maior que 1 MB.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "Content-Type diferente de application/json.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Limite de tentativas de login excedido.",
+        "headers": {
+          "Retry-After": {
+            "description": "Segundos ate uma nova tentativa.",
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  }
+}
