@@ -118,6 +118,16 @@ final class PdoTokenBlacklistRepositoryTest extends TestCase
 
     public function testIgnoresAndDeletesExpiredBlacklistEntries(): void
     {
+        $existingExpiredEntries = (int) $this->connection
+            ->query(
+                <<<'SQL'
+                SELECT COUNT(*)
+                FROM token_blacklist
+                WHERE expires_at <= UTC_TIMESTAMP()
+                SQL
+            )
+            ->fetchColumn();
+
         $expiredToken = $this->createClaims();
         $activeToken = $this->createClaims();
 
@@ -152,7 +162,7 @@ final class PdoTokenBlacklistRepositoryTest extends TestCase
             $this->repository->contains($activeToken->jti)
         );
         self::assertSame(
-            1,
+            $existingExpiredEntries + 1,
             $this->repository->deleteExpired()
         );
 
