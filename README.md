@@ -14,7 +14,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - conexão PDO centralizada e validada com o MySQL;
 - criptografia autenticada implementada e testada com Libsodium;
 - hash protegido para consultas de dados criptografados;
-- migrations versionadas para usuários, pedidos, refresh tokens e blacklist;
+- migrations versionadas para usuários, pedidos, tokens e limite de login;
 - entidade, perfis e validação do cadastro de usuários;
 - persistência de usuários com PDO e proteção dos dados sensíveis;
 - service de usuários com validação de duplicidade e hash de senha;
@@ -32,6 +32,10 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - serviço de cookies de autenticação com atributos de segurança testados;
 - controller de autenticação para login, refresh e logout;
 - proteção CSRF por cookie e header nos endpoints sensíveis;
+- vínculo do CSRF com a sessão registrada no access token;
+- limite persistente de tentativas de login por credencial/IP e por IP;
+- limite de 1 MB e `Content-Type` obrigatório nos corpos JSON;
+- headers HTTP de segurança e versões do Apache/PHP ocultadas;
 - CORS restrito à origem configurada para o frontend;
 - preflight `OPTIONS` validado sem exigir autenticação;
 - rotas HTTP de login, refresh e logout conectadas;
@@ -134,7 +138,9 @@ PedidosFull/
 |   |   |-- Security/
 |   |   |   |-- CsrfTokenService.php       # Geração e validação de CSRF
 |   |   |   |-- DataCipher.php             # Criptografia autenticada
-|   |   |   `-- LookupHasher.php            # Hash protegido para consultas
+|   |   |   |-- LoginRateLimiter.php        # Contrato do limite de login
+|   |   |   |-- LookupHasher.php            # Hash protegido para consultas
+|   |   |   `-- PdoLoginRateLimiter.php     # Limite persistente no MySQL
 |   |   |-- Routing/                      # Registro e resolução de rotas
 |   |   `-- Service/
 |   |       |-- AuthenticationService.php   # Regras de autenticação
@@ -248,6 +254,20 @@ VITE_API_URL=http://localhost:18080
 Em produção, essa origem deve utilizar HTTPS. Como a autenticação usa cookies,
 o frontend deverá enviar `credentials: 'include'` nas requisições HTTP.
 
+O limite de login usa os seguintes valores padrão, que podem ser ajustados no
+`.env`:
+
+```dotenv
+AUTH_LOGIN_MAX_ATTEMPTS=5
+AUTH_LOGIN_IP_MAX_ATTEMPTS=20
+AUTH_LOGIN_WINDOW=900
+AUTH_LOGIN_BLOCK=900
+```
+
+O primeiro limite considera a combinação usuário/IP e o segundo evita a
+distribuição de tentativas entre vários usuários no mesmo IP. As chaves desses
+registros são protegidas com HMAC antes de serem persistidas.
+
 Suba o frontend, a API e o MySQL:
 
 ```bash
@@ -355,7 +375,7 @@ docker compose exec api composer test:smoke
 ```
 
 O smoke test acessa a API pelo Apache, valida as respostas HTTP 200, 204, 403,
-404 e 405, incluindo o cabeçalho `Allow`, e confirma que essas respostas não
+404, 405 e 415, incluindo o cabeçalho `Allow`, e confirma que essas respostas não
 criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
 migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
 em uma transação temporária para validar a revogação e a blacklist. O smoke
@@ -372,7 +392,9 @@ final da execução.
 
 O smoke também envia requisições como um navegador: confirma a origem
 permitida, o preflight `OPTIONS`, cookies habilitados, cache do preflight e o
-bloqueio de origens e headers não autorizados.
+bloqueio de origens e headers não autorizados. Também verifica os headers de
+segurança, a ocultação das versões do servidor, `Content-Type` JSON e rejeição
+de um token CSRF pertencente a outra sessão.
 
 Para executar PHPUnit e o smoke test em sequência:
 
@@ -402,7 +424,7 @@ de autenticação.
 Os testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`,
 escopo, expiração, remoção e codificação contra injeção. Os testes de integração
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
-incluindo registro, rotação, revogação, reutilização e limpeza de refresh
+incluindo limite de login, registro, rotação, revogação, reutilização e limpeza de refresh
 tokens, além de inserção, consulta e limpeza da blacklist. A persistência de
 pedidos é testada com o MySQL real e inclui verificação de que nome do cliente
 e descrição não são armazenados em texto puro.
@@ -410,7 +432,7 @@ e descrição não são armazenados em texto puro.
 Resultado atual:
 
 ```text
-OK (258 tests, 777 assertions)
+OK (270 tests, 822 assertions)
 ```
 
 O frontend possui atualmente:
@@ -480,10 +502,39 @@ consulta se o usuário continua ativo, preserva a família, invalida o token
 usado e emite um novo par de tokens com um novo CSRF. O logout já revoga a
 família do refresh e bloqueia o access token ainda válido. Login, refresh e
 logout já estão conectados à camada HTTP com cookies `HttpOnly`, `SameSite` e
-validação CSRF por double-submit. Nas rotas protegidas, o middleware valida o
+validação CSRF por double-submit. Nas operações protegidas, o hash do cookie
+também precisa corresponder ao claim CSRF do access token, impedindo o uso de
+um CSRF emitido para outra sessão. Nas rotas protegidas, o middleware valida o
 access token, consulta a blacklist e carrega o usuário atual do banco. Assim,
 desativação e mudança de perfil têm efeito sem esperar o JWT expirar. A
 autorização administrativa compara o perfil atual com `ADMIN`.
+
+As falhas de login são limitadas no MySQL por credencial/IP e por IP. Esse
+armazenamento funciona entre processos e futuras réplicas da API. Usuários
+inexistentes também passam por uma verificação de hash de senha fictício para
+reduzir diferenças de tempo que poderiam revelar quais contas existem. Corpos
+JSON exigem `application/json` e possuem limite de 1 MB tanto no PHP quanto no
+Apache.
+
+As respostas recebem `Cache-Control: no-store`, proteção contra MIME sniffing,
+frames, envio de referência e uma política restritiva de conteúdo. O Apache e
+o PHP não expõem suas versões. HSTS é enviado apenas quando `APP_ENV` é
+`production`, porque ativá-lo em HTTP local prejudicaria o desenvolvimento.
+
+## Preparação para produção
+
+O Compose atual executa Vite e inclui ferramentas de desenvolvimento para
+facilitar a implementação. Antes da publicação, vou criar uma configuração de
+produção separada com estes pontos:
+
+- TLS/HTTPS encerrado por um proxy reverso;
+- `APP_ENV=production`, `APP_DEBUG=false` e `AUTH_COOKIE_SECURE=true`;
+- `FRONTEND_ORIGIN` e `VITE_API_URL` com os domínios HTTPS reais;
+- segredos gerenciados pela plataforma, sem arquivo `.env` na imagem;
+- frontend compilado por `npm run build` e servido como arquivos estáticos;
+- API instalada com `composer install --no-dev --classmap-authoritative`;
+- banco e backups fora da rede pública, com migrations executadas na entrega;
+- observabilidade, retenção de logs e alertas sem dados pessoais ou segredos.
 
 Na administração de usuários, uma troca de senha, desativação ou exclusão
 lógica revoga os refresh tokens do usuário afetado. O access token continua
