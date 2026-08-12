@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Exception\InvalidCredentialsException;
+use App\Exception\ClientNotFoundException;
 use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
@@ -155,6 +156,15 @@ final readonly class ErrorHandler
             return Response::json(
                 [
                     'error' => 'Usuario nao encontrado.',
+                ],
+                404
+            );
+        }
+
+        if ($exception instanceof ClientNotFoundException) {
+            return Response::json(
+                [
+                    'error' => 'Cliente nao encontrado.',
                 ],
                 404
             );

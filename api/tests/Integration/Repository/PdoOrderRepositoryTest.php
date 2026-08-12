@@ -9,6 +9,7 @@ use App\Database\ConnectionFactory;
 use App\Entity\OrderStatus;
 use App\Entity\UserProfile;
 use App\Repository\PdoOrderRepository;
+use App\Repository\PdoClientRepository;
 use App\Repository\PdoUserRepository;
 use App\Security\DataCipher;
 use App\Security\LookupHasher;
@@ -20,6 +21,8 @@ final class PdoOrderRepositoryTest extends TestCase
     private PDO $connection;
     private PdoOrderRepository $orders;
     private int $userId;
+    private int $clientId;
+    private DataCipher $cipher;
 
     protected function setUp(): void
     {
@@ -28,7 +31,7 @@ final class PdoOrderRepositoryTest extends TestCase
         $this->connection = ConnectionFactory::create();
         $this->connection->beginTransaction();
 
-        $cipher = new DataCipher(
+        $this->cipher = new DataCipher(
             Environment::getRequired(
                 'DATA_ENCRYPTION_KEY'
             )
@@ -36,7 +39,7 @@ final class PdoOrderRepositoryTest extends TestCase
 
         $users = new PdoUserRepository(
             $this->connection,
-            $cipher,
+            $this->cipher,
             new LookupHasher(
                 Environment::getRequired(
                     'DATA_LOOKUP_KEY'
@@ -57,9 +60,18 @@ final class PdoOrderRepositoryTest extends TestCase
             UserProfile::Operator
         )->id;
 
+        $clients = new PdoClientRepository(
+            $this->connection,
+            $this->cipher
+        );
+        $this->clientId = $clients->create(
+            'Cliente Protegido',
+            '11999999999'
+        )->id;
+
         $this->orders = new PdoOrderRepository(
             $this->connection,
-            $cipher
+            $this->cipher
         );
     }
 
@@ -74,25 +86,24 @@ final class PdoOrderRepositoryTest extends TestCase
 
     public function testCreatesAndReadsEncryptedOrder(): void
     {
-        $customerName = 'Cliente Protegido';
         $description = 'Descricao confidencial';
 
         $order = $this->orders->create(
-            $customerName,
+            $this->clientId,
             $description,
             OrderStatus::Pending,
             $this->userId
         );
 
         self::assertGreaterThan(0, $order->id);
-        self::assertSame($customerName, $order->customerName);
+        self::assertSame($this->clientId, $order->clientId);
         self::assertSame($description, $order->description);
         self::assertSame($this->userId, $order->createdBy);
 
         $statement = $this->connection->prepare(
             <<<'SQL'
             SELECT
-                cliente_nome_criptografado,
+                cliente_id,
                 descricao_criptografada
             FROM pedidos
             WHERE id = :id
@@ -103,10 +114,7 @@ final class PdoOrderRepositoryTest extends TestCase
         $row = $statement->fetch();
 
         self::assertIsArray($row);
-        self::assertNotSame(
-            $customerName,
-            $row['cliente_nome_criptografado']
-        );
+        self::assertSame($this->clientId, (int) $row['cliente_id']);
         self::assertNotSame(
             $description,
             $row['descricao_criptografada']
@@ -119,7 +127,7 @@ final class PdoOrderRepositoryTest extends TestCase
     public function testListsAndUpdatesOrder(): void
     {
         $order = $this->orders->create(
-            'Cliente Original',
+            $this->clientId,
             'Descricao Original',
             OrderStatus::Pending,
             $this->userId
@@ -135,16 +143,13 @@ final class PdoOrderRepositoryTest extends TestCase
 
         $updated = $this->orders->update(
             $order->id,
-            'Cliente Atualizado',
+            $this->clientId,
             'Descricao Atualizada',
             OrderStatus::Completed
         );
 
         self::assertNotNull($updated);
-        self::assertSame(
-            'Cliente Atualizado',
-            $updated->customerName
-        );
+        self::assertSame($this->clientId, $updated->clientId);
         self::assertSame(
             OrderStatus::Completed,
             $updated->status
@@ -158,10 +163,53 @@ final class PdoOrderRepositoryTest extends TestCase
         self::assertNull(
             $this->orders->update(
                 999999999,
-                'Cliente',
+                $this->clientId,
                 'Descricao',
                 OrderStatus::Pending
             )
         );
     }
+
+    public function testSchemaStoresOnlyClientForeignKey(): void
+    {
+        $statement = $this->connection->query(
+            <<<'SQL'
+            SELECT
+                column_name AS name,
+                is_nullable AS nullable
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'pedidos'
+              AND column_name IN (
+                  'cliente_id',
+                  'cliente_nome_criptografado'
+              )
+            ORDER BY ordinal_position
+            SQL
+        );
+
+        self::assertSame(
+            [
+                [
+                    'name' => 'cliente_id',
+                    'nullable' => 'NO',
+                ],
+            ],
+            $statement->fetchAll()
+        );
+
+        $foreignKey = $this->connection->query(
+            <<<'SQL'
+            SELECT referenced_table_name
+            FROM information_schema.key_column_usage
+            WHERE table_schema = DATABASE()
+              AND table_name = 'pedidos'
+              AND column_name = 'cliente_id'
+              AND referenced_table_name IS NOT NULL
+            SQL
+        )->fetchColumn();
+
+        self::assertSame('clientes', $foreignKey);
+    }
+
 }

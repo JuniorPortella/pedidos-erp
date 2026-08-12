@@ -1,5 +1,6 @@
 import {
   ChevronLeft,
+  ContactsOutlined,
   DashboardOutlined,
   Inventory2Outlined,
   Logout,
@@ -45,6 +46,12 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   { label: 'Inicio', path: '/', icon: <DashboardOutlined /> },
   { label: 'Pedidos', path: '/pedidos', icon: <Inventory2Outlined /> },
+  {
+    label: 'Clientes',
+    path: '/clientes',
+    icon: <ContactsOutlined />,
+    adminOnly: true,
+  },
   {
     label: 'Acessos',
     path: '/acessos',

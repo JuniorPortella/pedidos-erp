@@ -38,12 +38,17 @@ import { PageHeader } from '../components/PageHeader';
 import { SearchField } from '../components/SearchField';
 import { ApiError, apiRequest, jsonBody } from '../lib/api';
 import { matchesSearch } from '../lib/search';
-import type { Order, OrderStatus, ValidationFields } from '../types/api';
+import type {
+  Client,
+  Order,
+  OrderStatus,
+  ValidationFields,
+} from '../types/api';
 
 const ROWS_PER_PAGE = 10;
 
 interface OrderForm {
-  cliente_nome: string;
+  cliente_id: string;
   descricao: string;
   status: OrderStatus;
 }
@@ -53,7 +58,7 @@ interface OrdersLocationState {
 }
 
 const emptyForm: OrderForm = {
-  cliente_nome: '',
+  cliente_id: '',
   descricao: '',
   status: 'PENDENTE',
 };
@@ -72,6 +77,8 @@ const statusColors: Record<OrderStatus, 'warning' | 'info' | 'success'> = {
 
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -85,18 +92,23 @@ export function OrdersPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const clientsById = useMemo(
+    () => new Map(clients.map((client) => [client.id, client])),
+    [clients],
+  );
+
   const filteredOrders = useMemo(
     () =>
       orders.filter((order) =>
         matchesSearch(search, [
           order.id,
-          order.cliente_nome,
+          clientsById.get(order.cliente_id)?.nome ?? '',
           order.descricao,
           order.status,
           statusLabels[order.status],
         ]),
       ),
-    [orders, search],
+    [clientsById, orders, search],
   );
 
   const visibleOrders = useMemo(
@@ -107,6 +119,15 @@ export function OrdersPage() {
       ),
     [filteredOrders, page],
   );
+
+  const currentClientName = editingId === null
+    ? null
+    : clientsById.get(
+      orders.find((order) => order.id === editingId)?.cliente_id ?? 0,
+    )?.nome ?? null;
+
+  const selectedClientIsMissing = form.cliente_id !== ''
+    && !clients.some((client) => String(client.id) === form.cliente_id);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -126,6 +147,23 @@ export function OrdersPage() {
     }
   }, []);
 
+  const loadClients = useCallback(async () => {
+    setClientsLoading(true);
+
+    try {
+      const response = await apiRequest<{ clients: Client[] }>('/clientes');
+      setClients(response.clients ?? []);
+    } catch (loadError) {
+      setError(
+        loadError instanceof ApiError
+          ? loadError.message
+          : 'Nao foi possivel carregar os clientes.',
+      );
+    } finally {
+      setClientsLoading(false);
+    }
+  }, []);
+
   const openNew = useCallback(() => {
     setEditingId(null);
     setForm(emptyForm);
@@ -137,7 +175,8 @@ export function OrdersPage() {
 
   useEffect(() => {
     void loadOrders();
-  }, [loadOrders]);
+    void loadClients();
+  }, [loadClients, loadOrders]);
 
   useEffect(() => {
     const state = location.state as OrdersLocationState | null;
@@ -165,7 +204,7 @@ export function OrdersPage() {
   const openEdit = (order: Order) => {
     setEditingId(order.id);
     setForm({
-      cliente_nome: order.cliente_nome,
+      cliente_id: String(order.cliente_id),
       descricao: order.descricao,
       status: order.status,
     });
@@ -195,8 +234,8 @@ export function OrdersPage() {
 
     const localErrors: ValidationFields = {};
 
-    if (!form.cliente_nome.trim()) {
-      localErrors.cliente_nome = 'Informe o nome do cliente.';
+    if (!form.cliente_id) {
+      localErrors.cliente_id = 'Selecione um cliente.';
     }
 
     if (!form.descricao.trim()) {
@@ -215,7 +254,11 @@ export function OrdersPage() {
         editingId === null ? '/pedidos' : `/pedidos/${editingId}`,
         {
           method: editingId === null ? 'POST' : 'PUT',
-          body: jsonBody(form),
+          body: jsonBody({
+            cliente_id: Number(form.cliente_id),
+            descricao: form.descricao,
+            status: form.status,
+          }),
         },
       );
 
@@ -320,15 +363,35 @@ export function OrdersPage() {
               }}
             >
               <TextField
+                select
                 label="Cliente"
-                value={form.cliente_nome}
-                onChange={(event) => update('cliente_nome', event.target.value)}
-                error={Boolean(fields.cliente_nome)}
-                helperText={fields.cliente_nome}
-                inputProps={{ maxLength: 120 }}
+                value={form.cliente_id}
+                onChange={(event) => update('cliente_id', event.target.value)}
+                error={Boolean(fields.cliente_id)}
+                helperText={
+                  fields.cliente_id
+                  ?? (clientsLoading ? 'Carregando clientes...' : undefined)
+                }
+                disabled={clientsLoading}
                 required
                 autoFocus
-              />
+              >
+                {selectedClientIsMissing && (
+                  <MenuItem value={form.cliente_id}>
+                    {currentClientName ?? 'Cliente atual'}
+                  </MenuItem>
+                )}
+                {clients.length === 0 && (
+                  <MenuItem value="" disabled>
+                    Nenhum cliente disponivel
+                  </MenuItem>
+                )}
+                {clients.map((client) => (
+                  <MenuItem key={client.id} value={String(client.id)}>
+                    {client.nome} - {client.telefone}
+                  </MenuItem>
+                ))}
+              </TextField>
 
               <TextField
                 select
@@ -421,7 +484,8 @@ export function OrdersPage() {
                   <TableRow hover key={order.id}>
                     <TableCell>{order.id}</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>
-                      {order.cliente_nome}
+                      {clientsById.get(order.cliente_id)?.nome
+                        ?? `Cliente #${order.cliente_id}`}
                     </TableCell>
                     <TableCell sx={{ maxWidth: 420 }}>
                       <Typography noWrap variant="body2">

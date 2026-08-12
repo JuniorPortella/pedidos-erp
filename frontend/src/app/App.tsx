@@ -19,6 +19,11 @@ const OrdersPage = lazy(() =>
     default: module.OrdersPage,
   })),
 );
+const ClientsPage = lazy(() =>
+  import('../pages/ClientsPage').then((module) => ({
+    default: module.ClientsPage,
+  })),
+);
 const AccessPage = lazy(() =>
   import('../pages/AccessPage').then((module) => ({
     default: module.AccessPage,
@@ -51,6 +56,7 @@ export function App() {
             />
 
             <Route element={<AdminRoute />}>
+              <Route path="clientes" element={<ClientsPage />} />
               <Route path="acessos" element={<AccessPage />} />
             </Route>
           </Route>

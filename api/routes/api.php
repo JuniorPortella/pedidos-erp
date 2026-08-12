@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Controller\AuthenticationController;
+use App\Controller\ClientController;
 use App\Controller\OrderController;
 use App\Controller\UserController;
 use App\Dto\AuthenticatedUser;
@@ -17,6 +18,7 @@ return static function (
     Router $router,
     AuthenticationController $authentication,
     UserController $users,
+    ClientController $clients,
     OrderController $orders,
     AccessTokenMiddleware $accessToken,
     AdminAuthorization $adminAuthorization,
@@ -188,6 +190,111 @@ return static function (
                     $parameters['id'],
                     $authenticatedUser
                 );
+            }
+        )
+    );
+
+    $router->get(
+        '/clientes',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static fn (
+                AuthenticatedUser $authenticatedUser
+            ): Response => $clients->index()
+        )
+    );
+
+    $router->post(
+        '/clientes',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $csrf,
+                $adminAuthorization,
+                $clients
+            ): Response {
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
+
+                $adminAuthorization->authorize(
+                    $authenticatedUser
+                );
+
+                return $clients->create($request);
+            }
+        )
+    );
+
+    $router->put(
+        '/clientes/{id}',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $parameters,
+                $csrf,
+                $adminAuthorization,
+                $clients
+            ): Response {
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
+
+                $adminAuthorization->authorize(
+                    $authenticatedUser
+                );
+
+                return $clients->update(
+                    $request,
+                    $parameters['id']
+                );
+            }
+        )
+    );
+
+    $router->delete(
+        '/clientes/{id}',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $parameters,
+                $csrf,
+                $adminAuthorization,
+                $clients
+            ): Response {
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
+
+                $adminAuthorization->authorize(
+                    $authenticatedUser
+                );
+
+                return $clients->delete($parameters['id']);
             }
         )
     );

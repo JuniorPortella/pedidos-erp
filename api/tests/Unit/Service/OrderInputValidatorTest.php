@@ -24,14 +24,14 @@ final class OrderInputValidatorTest extends TestCase
     public function testNormalizesValidInput(): void
     {
         $input = $this->validator->validate([
-            'cliente_nome' => '  Cliente Teste  ',
+            'cliente_id' => '42',
             'descricao' => '  Pedido completo  ',
             'status' => '  em_processamento  ',
         ]);
 
         self::assertSame(
-            'Cliente Teste',
-            $input->customerName
+            42,
+            $input->clientId
         );
         self::assertSame(
             'Pedido completo',
@@ -49,7 +49,7 @@ final class OrderInputValidatorTest extends TestCase
         OrderStatus $expected
     ): void {
         $input = $this->validator->validate([
-            'cliente_nome' => 'Cliente',
+            'cliente_id' => 1,
             'descricao' => 'Descricao',
             'status' => $value,
         ]);
@@ -86,7 +86,7 @@ final class OrderInputValidatorTest extends TestCase
         } catch (ValidationException $exception) {
             self::assertSame(
                 [
-                    'cliente_nome',
+                    'cliente_id',
                     'descricao',
                     'status',
                 ],
@@ -99,7 +99,7 @@ final class OrderInputValidatorTest extends TestCase
     {
         try {
             $this->validator->validate([
-                'cliente_nome' => 'Cliente',
+                'cliente_id' => 1,
                 'descricao' => 'Descricao',
                 'status' => 'CANCELADO',
             ]);
@@ -116,20 +116,46 @@ final class OrderInputValidatorTest extends TestCase
     {
         try {
             $this->validator->validate([
-                'cliente_nome' => str_repeat('a', 121),
+                'cliente_id' => 1,
                 'descricao' => str_repeat('b', 5001),
                 'status' => 'PENDENTE',
             ]);
             self::fail('Era esperada uma ValidationException.');
         } catch (ValidationException $exception) {
             self::assertArrayHasKey(
-                'cliente_nome',
-                $exception->errors()
-            );
-            self::assertArrayHasKey(
                 'descricao',
                 $exception->errors()
             );
         }
+    }
+
+    #[DataProvider('invalidClientIds')]
+    public function testRejectsInvalidClientId(mixed $value): void
+    {
+        try {
+            $this->validator->validate([
+                'cliente_id' => $value,
+                'descricao' => 'Descricao',
+                'status' => 'PENDENTE',
+            ]);
+            self::fail('Era esperada uma ValidationException.');
+        } catch (ValidationException $exception) {
+            self::assertArrayHasKey(
+                'cliente_id',
+                $exception->errors()
+            );
+        }
+    }
+
+    public static function invalidClientIds(): array
+    {
+        return [
+            'missing' => [null],
+            'zero' => [0],
+            'negative' => [-1],
+            'decimal' => [1.5],
+            'text' => ['cliente'],
+            'boolean' => [true],
+        ];
     }
 }

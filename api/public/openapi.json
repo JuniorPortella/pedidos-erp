@@ -3,7 +3,7 @@
   "info": {
     "title": "PedidosFull API",
     "version": "1.0.0",
-    "description": "API de autenticacao, administracao de acessos e gerenciamento de pedidos. A autenticacao utiliza cookies HttpOnly e as operacoes de escrita exigem o header X-CSRF-Token com o mesmo valor do cookie csrf_token.",
+    "description": "API de autenticacao, clientes, administracao de acessos e gerenciamento de pedidos. A autenticacao utiliza cookies HttpOnly e as operacoes de escrita exigem o header X-CSRF-Token com o mesmo valor do cookie csrf_token.",
     "license": {
       "name": "Proprietary",
       "identifier": "LicenseRef-Proprietary"
@@ -27,6 +27,10 @@
     {
       "name": "Usuarios",
       "description": "Administracao de acessos restrita ao perfil ADMIN."
+    },
+    {
+      "name": "Clientes",
+      "description": "Cadastro de clientes para usuarios autenticados."
     },
     {
       "name": "Pedidos",
@@ -306,6 +310,136 @@
         }
       }
     },
+    "/clientes": {
+      "get": {
+        "tags": ["Clientes"],
+        "summary": "Lista os clientes cadastrados",
+        "operationId": "listClients",
+        "security": [
+          { "accessCookie": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de clientes descriptografados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["clients"],
+                  "properties": {
+                    "clients": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Client" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthenticated" }
+        }
+      },
+      "post": {
+        "tags": ["Clientes"],
+        "summary": "Cadastra um cliente",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "createClient",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClientInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cliente cadastrado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClientResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/clientes/{id}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/ClientId" }
+      ],
+      "put": {
+        "tags": ["Clientes"],
+        "summary": "Atualiza um cliente",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "updateClient",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClientInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cliente atualizado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClientResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidJson" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "413": { "$ref": "#/components/responses/PayloadTooLarge" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      },
+      "delete": {
+        "tags": ["Clientes"],
+        "summary": "Exclui logicamente um cliente",
+        "description": "Disponivel somente para administradores.",
+        "operationId": "deleteClient",
+        "security": [
+          {
+            "accessCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "204": { "description": "Cliente excluido." },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
     "/pedidos": {
       "get": {
         "tags": ["Pedidos"],
@@ -477,6 +611,13 @@
         "required": true,
         "description": "Identificador do pedido.",
         "schema": { "type": "integer", "minimum": 1 }
+      },
+      "ClientId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Identificador do cliente.",
+        "schema": { "type": "integer", "minimum": 1 }
       }
     },
     "schemas": {
@@ -577,22 +718,47 @@
       "OrderInput": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["cliente_nome", "descricao", "status"],
+        "required": ["cliente_id", "descricao", "status"],
         "properties": {
-          "cliente_nome": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "cliente_id": { "type": "integer", "minimum": 1 },
           "descricao": { "type": "string", "minLength": 1, "maxLength": 5000 },
           "status": { "$ref": "#/components/schemas/OrderStatus" }
         }
       },
       "Order": {
         "type": "object",
-        "required": ["id", "cliente_nome", "descricao", "status", "criado_por", "created_at", "updated_at"],
+        "required": ["id", "cliente_id", "descricao", "status", "criado_por", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "integer", "minimum": 1 },
-          "cliente_nome": { "type": "string", "maxLength": 120 },
+          "cliente_id": { "type": "integer", "minimum": 1 },
           "descricao": { "type": "string", "maxLength": 5000 },
           "status": { "$ref": "#/components/schemas/OrderStatus" },
           "criado_por": { "type": "integer", "minimum": 1 },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ClientInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nome", "telefone"],
+        "properties": {
+          "nome": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "telefone": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 20,
+            "description": "Telefone com 8 a 15 digitos; aceita formatacao comum."
+          }
+        }
+      },
+      "Client": {
+        "type": "object",
+        "required": ["id", "nome", "telefone", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "nome": { "type": "string", "maxLength": 120 },
+          "telefone": { "type": "string", "maxLength": 20 },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }
@@ -616,6 +782,13 @@
         "required": ["order"],
         "properties": {
           "order": { "$ref": "#/components/schemas/Order" }
+        }
+      },
+      "ClientResponse": {
+        "type": "object",
+        "required": ["client"],
+        "properties": {
+          "client": { "$ref": "#/components/schemas/Client" }
         }
       },
       "Error": {

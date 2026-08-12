@@ -30,6 +30,7 @@ function renderShell(path = '/pedidos') {
         <Route element={<AppShell />}>
           <Route path="/" element={<div>Inicio do sistema</div>} />
           <Route path="/pedidos" element={<div>Lista de pedidos</div>} />
+          <Route path="/clientes" element={<div>Lista de clientes</div>} />
           <Route path="/acessos" element={<div>Lista de acessos</div>} />
         </Route>
       </Routes>
@@ -64,6 +65,7 @@ describe('AppShell', () => {
     renderShell('/');
 
     expect(screen.queryByText('Acessos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Clientes')).not.toBeInTheDocument();
     expect(screen.getByText('Operador')).toBeInTheDocument();
   });
 

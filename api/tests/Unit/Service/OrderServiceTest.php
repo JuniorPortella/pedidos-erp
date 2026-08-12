@@ -10,25 +10,35 @@ use App\Exception\OrderNotFoundException;
 use App\Service\OrderService;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\InMemoryOrderRepository;
+use Tests\Support\InMemoryClientRepository;
 
 final class OrderServiceTest extends TestCase
 {
     private InMemoryOrderRepository $repository;
+    private int $clientId;
     private OrderService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
 
+        $clients = new InMemoryClientRepository();
+        $this->clientId = $clients->create(
+            'Cliente',
+            '11999999999'
+        )->id;
         $this->repository = new InMemoryOrderRepository();
-        $this->service = new OrderService($this->repository);
+        $this->service = new OrderService(
+            $this->repository,
+            $clients
+        );
     }
 
     public function testCreatesOrderForAuthenticatedUser(): void
     {
         $order = $this->service->create(
             new OrderInput(
-                'Cliente',
+                $this->clientId,
                 'Descricao',
                 OrderStatus::Pending
             ),
@@ -36,6 +46,7 @@ final class OrderServiceTest extends TestCase
         );
 
         self::assertSame(1, $order->id);
+        self::assertSame($this->clientId, $order->clientId);
         self::assertSame(42, $order->createdBy);
         self::assertSame(
             OrderStatus::Pending,
@@ -47,7 +58,7 @@ final class OrderServiceTest extends TestCase
     {
         $created = $this->service->create(
             new OrderInput(
-                'Cliente',
+                $this->clientId,
                 'Descricao',
                 OrderStatus::Pending
             ),
@@ -68,7 +79,7 @@ final class OrderServiceTest extends TestCase
     {
         $created = $this->service->create(
             new OrderInput(
-                'Cliente',
+                $this->clientId,
                 'Descricao',
                 OrderStatus::Pending
             ),
@@ -78,16 +89,13 @@ final class OrderServiceTest extends TestCase
         $updated = $this->service->update(
             $created->id,
             new OrderInput(
-                'Cliente Atualizado',
+                $this->clientId,
                 'Descricao Atualizada',
                 OrderStatus::Completed
             )
         );
 
-        self::assertSame(
-            'Cliente Atualizado',
-            $updated->customerName
-        );
+        self::assertSame($this->clientId, $updated->clientId);
         self::assertSame(
             OrderStatus::Completed,
             $updated->status
@@ -113,10 +121,24 @@ final class OrderServiceTest extends TestCase
         $this->service->update(
             999,
             new OrderInput(
-                'Cliente',
+                $this->clientId,
                 'Descricao',
                 OrderStatus::Pending
             )
+        );
+    }
+
+    public function testRejectsMissingClient(): void
+    {
+        $this->expectException(\App\Exception\ValidationException::class);
+
+        $this->service->create(
+            new OrderInput(
+                999,
+                'Descricao',
+                OrderStatus::Pending
+            ),
+            10
         );
     }
 }

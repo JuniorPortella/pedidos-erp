@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http;
 
+use App\Exception\ClientNotFoundException;
 use App\Exception\InvalidCredentialsException;
 use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
@@ -152,6 +153,13 @@ final class ErrorHandlerTest extends TestCase
                 ),
                 404,
                 'Usuario nao encontrado.',
+            ],
+            'client not found' => [
+                new ClientNotFoundException(
+                    'Detalhe interno.'
+                ),
+                404,
+                'Cliente nao encontrado.',
             ],
         ];
     }

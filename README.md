@@ -1,8 +1,8 @@
-# Gerenciamento de Pedidos
+# Pedidos ERP
 
-Estou desenvolvendo este projeto para o teste técnico fullstack. Meu objetivo é
-criar uma API de pedidos em PHP, uma interface em React e preparar todo o
-ambiente para rodar com Docker.
+Este projeto evolui a entrega do teste técnico fullstack para um ERP de
+pedidos. A aplicação possui API em PHP, interface em React e ambiente completo
+com Docker.
 
 ## Estado atual
 
@@ -14,7 +14,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - conexão PDO centralizada e validada com o MySQL;
 - criptografia autenticada implementada e testada com Libsodium;
 - hash protegido para consultas de dados criptografados;
-- migrations versionadas para usuários, pedidos, tokens e limite de login;
+- migrations versionadas para usuários, clientes, pedidos, tokens e limite de login;
 - entidade, perfis e validação do cadastro de usuários;
 - persistência de usuários com PDO e proteção dos dados sensíveis;
 - service de usuários com validação de duplicidade e hash de senha;
@@ -49,7 +49,11 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - exclusão lógica de usuários restrita ao perfil `ADMIN` e protegida por CSRF;
 - proteção contra desativação, exclusão ou remoção do perfil da própria conta;
 - revogação dos refresh tokens ao trocar a senha, desativar ou excluir um usuário;
+- criação, atualização e exclusão lógica de clientes restritas ao perfil `ADMIN`;
+- listagem de clientes disponível para `ADMIN` e `OPERADOR` autenticados;
+- nome e telefone dos clientes criptografados no banco;
 - criação, listagem, consulta e atualização de pedidos;
+- relacionamento entre pedidos e clientes por chave estrangeira `cliente_id`;
 - acesso aos pedidos permitido para usuários `ADMIN` e `OPERADOR` autenticados;
 - nome do cliente e descrição do pedido criptografados no banco;
 - validação dos três status permitidos para pedidos;
@@ -61,8 +65,8 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - login conectado à API por cookies, CSRF e renovação automática da sessão;
 - rotas protegidas e menu condicionado aos perfis `ADMIN` e `OPERADOR`;
 - layout ERP responsivo inspirado na navegação lateral do AgraTeste;
-- tela inicial e páginas unificadas para administração de acessos e pedidos;
-- busca local e paginação de dez registros nas listas de acessos e pedidos;
+- tela inicial e páginas unificadas para acessos, clientes e pedidos;
+- busca local e paginação de dez registros nas listas de acessos, clientes e pedidos;
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
 - cliente HTTP, componentes e fluxos do frontend testados com Vitest;
 - build de produção validado pelo TypeScript e Vite;
@@ -173,7 +177,7 @@ PedidosFull/
 |   |   |-- components/                   # Shell ERP e componentes comuns
 |   |   |-- contexts/                     # Estado da autenticação
 |   |   |-- lib/                          # Cliente HTTP e renovação da sessão
-|   |   |-- pages/                        # Login, início, acessos e pedidos
+|   |   |-- pages/                        # Login, início, acessos, clientes e pedidos
 |   |   `-- types/                        # Contratos TypeScript da API
 |   |-- Dockerfile
 |   |-- package.json
@@ -346,6 +350,10 @@ o MySQL na porta `3306` apenas dentro da rede Docker, sem publicá-la na máquin
 | `POST` | `/auth/register` | Cria usuário; exige `ADMIN` e proteção CSRF |
 | `PUT` | `/usuarios/{id}` | Atualiza usuário; exige `ADMIN` e proteção CSRF |
 | `DELETE` | `/usuarios/{id}` | Exclui usuário logicamente; exige `ADMIN` e proteção CSRF |
+| `GET` | `/clientes` | Lista clientes; exige autenticação |
+| `POST` | `/clientes` | Cria cliente; exige `ADMIN` e proteção CSRF |
+| `PUT` | `/clientes/{id}` | Atualiza cliente; exige `ADMIN` e proteção CSRF |
+| `DELETE` | `/clientes/{id}` | Exclui cliente logicamente; exige `ADMIN` e proteção CSRF |
 | `GET` | `/pedidos` | Lista pedidos; exige autenticação |
 | `POST` | `/pedidos` | Cria pedido; exige autenticação e proteção CSRF |
 | `GET` | `/pedidos/{id}` | Detalha pedido; exige autenticação |
@@ -418,10 +426,13 @@ bloqueio de token inválido ou revogado, acesso comum do `OPERADOR`, bloqueio do
 valida a criação administrativa de usuário, política de senha, proteção CSRF e
 duplicidade de e-mail e usuário. Também valida atualização, troca de senha,
 exclusão lógica, revogação da sessão e proteção da própria conta do
-administrador. Para pedidos, testa autenticação, CSRF, validação, criação por
-`OPERADOR`, listagem, detalhe, atualização, resposta `404` e a ausência do
-endpoint `DELETE`. Os registros temporários, pedidos e tokens são removidos ao
-final da execução.
+administrador. Para clientes, confirma que o `OPERADOR` pode listar, mas não
+pode criar, alterar ou excluir; também testa CSRF, validação, CRUD por `ADMIN`
+e confirma diretamente no MySQL que nome e telefone não foram armazenados em
+texto puro. Para pedidos, testa o relacionamento por `cliente_id`,
+autenticação, CSRF, validação, criação por `OPERADOR`, listagem, detalhe,
+atualização, resposta `404` e a ausência do endpoint `DELETE`. Os registros
+temporários, clientes, pedidos e tokens são removidos ao final da execução.
 
 O smoke também envia requisições como um navegador: confirma a origem
 permitida, o preflight `OPTIONS`, cookies habilitados, cache do preflight e o
@@ -468,14 +479,15 @@ operações de escrita, a renovação automática após `401`, o tratamento dos
 erros de validação e a consolidação de requisições simultâneas em uma única
 rotação do refresh token. Também validam a busca sem diferença entre acentos
 e letras maiúsculas, a filtragem das listas e a paginação fixa de dez registros
-nas telas de acessos e pedidos. Os testes de componentes cobrem login,
+nas telas de acessos, clientes e pedidos. Os testes de componentes cobrem login,
 visibilidade da senha, restauração e proteção da sessão, autorização por perfil,
-navegação do menu, confirmação de logout, cadastro e exclusão de acessos,
-estados das listagens, criação, validação, carregamento e atualização de pedidos.
+navegação do menu, confirmação de logout, cadastro e exclusão de acessos e
+clientes, estados das listagens, criação, validação, carregamento e atualização
+de pedidos.
 
 Atualmente, a suíte possui testes unitários para o contrato OpenAPI, variáveis
 de ambiente, criptografia autenticada, hashes de consulta, entidades, validação
-e services de usuários e pedidos, JWT, CSRF, login, renovação de tokens,
+e services de usuários, clientes e pedidos, JWT, CSRF, login, renovação de tokens,
 request, response, router, logout, autenticação do access token, autorização por
 perfil, tratamento de erros, comando de criação de administrador, aplicação
 HTTP, logging e cookies de autenticação.
@@ -484,19 +496,19 @@ escopo, expiração, remoção e codificação contra injeção. Os testes de in
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
 incluindo limite de login, registro, rotação, revogação, reutilização e limpeza de refresh
 tokens, além de inserção, consulta e limpeza da blacklist. A persistência de
-pedidos é testada com o MySQL real e inclui verificação de que nome do cliente
-e descrição não são armazenados em texto puro.
+clientes e pedidos é testada com o MySQL real e inclui verificação de que os
+dados protegidos não são armazenados em texto puro.
 
 Resultado atual:
 
 ```text
-OK (276 tests, 1068 assertions)
+OK (300 tests, 1153 assertions)
 ```
 
 O frontend possui atualmente:
 
 ```text
-40 tests passed
+45 tests passed
 ```
 
 A refatoração do código legado possui:
@@ -547,11 +559,28 @@ Essa criptografia será uma das medidas de segurança do projeto, junto com
 controle de acesso por perfil, exclusão lógica de usuários e logs sem
 informações sensíveis.
 
-Nos pedidos, criptografo o nome do cliente e a descrição antes de persistir e
-descriptografo somente ao montar as entidades retornadas pela API. Todas as
-operações de escrita usam prepared statements. O campo `criado_por` registra o
-usuário autenticado que criou o pedido, enquanto `ADMIN` e `OPERADOR` podem
-acessar as quatro rotas exigidas no teste.
+Nos pedidos, criptografo a descrição antes de persistir e descriptografo
+somente ao montar as entidades retornadas pela API. O pedido armazena apenas
+`cliente_id`, obrigatório e protegido por uma chave estrangeira para
+`clientes`; o nome do cliente não é copiado para a tabela nem devolvido pelos
+endpoints de pedidos. O frontend consulta GET `/clientes`, monta a relação
+entre ID e nome em memória e usa esses dados tanto no seletor quanto na
+listagem. Todas as operações de escrita usam prepared statements. O campo
+`criado_por` registra o usuário autenticado que criou o pedido, enquanto
+`ADMIN` e `OPERADOR` podem acessar as quatro rotas de pedidos.
+
+No cadastro de clientes, nome e telefone também usam criptografia autenticada
+com contextos separados. A API descriptografa esses campos somente ao montar a
+resposta autorizada. Como a criptografia gera um nonce aleatório, não criei
+índices de busca sobre os textos cifrados: a tela carrega os clientes
+autorizados e filtra nome e telefone em memória. Para um volume elevado, esse
+fluxo deverá migrar para paginação no backend e um índice de consulta protegido
+definido conforme a regra de busca necessária.
+
+Somente `ADMIN` acessa a tela de manutenção de clientes e as rotas POST, PUT e
+DELETE. O `OPERADOR` pode executar GET `/clientes`, pois o formulário de pedido
+usa essa listagem para apresentar um seletor em vez de permitir a digitação
+livre do nome.
 
 Para a autenticação, escolhi separar access e refresh tokens e armazená-los em
 cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
@@ -624,24 +653,26 @@ sessão. O menu de acessos aparece apenas para `ADMIN`, mas essa condição visu
 não substitui a autorização do backend, que continua validando o perfil em
 cada rota administrativa.
 
-As listas de acessos e pedidos possuem busca instantânea e paginação de dez
-registros. A API devolve os registros autorizados e o frontend filtra os dados
-já descriptografados em memória, sem realizar uma nova consulta a cada tecla.
-Por isso, essa busca não utiliza os índices do MySQL. Uma futura paginação no
-servidor será necessária caso o volume de registros cresça significativamente.
+As listas de acessos, clientes e pedidos possuem busca instantânea e paginação
+de dez registros. A API devolve os registros autorizados e o frontend filtra
+os dados já descriptografados em memória, sem realizar uma nova consulta a cada
+tecla. Por isso, essa busca não utiliza os índices do MySQL. Uma futura
+paginação no servidor será necessária caso o volume de registros cresça
+significativamente.
 
 ## Limitações atuais
 
 A aplicação atende aos fluxos principais do teste, mas ainda possui limitações:
 
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
-  completo de usuários e as quatro rotas obrigatórias de pedidos;
+  completo de usuários, o cadastro de clientes e as quatro rotas obrigatórias
+  de pedidos;
 - a busca e a paginação atuais são locais e ainda não foram movidas para o
   servidor, o que seria necessário para volumes elevados de registros.
 
 ## Próximas etapas
 
 As três partes obrigatórias do teste estão implementadas. Como melhorias
-futuras, vou preparar uma configuração separada para produção e mover a busca e
-a paginação para o servidor quando o volume de registros justificar essa
-mudança.
+futuras, vou adicionar produtos e itens do pedido, preparar uma configuração
+separada para produção e mover a busca e a paginação para o servidor quando o
+volume de registros justificar essa mudança.

@@ -13,8 +13,6 @@ use RuntimeException;
 
 final readonly class PdoOrderRepository implements OrderRepository
 {
-    private const CUSTOMER_NAME_CONTEXT =
-        'pedidos.cliente_nome';
     private const DESCRIPTION_CONTEXT =
         'pedidos.descricao';
 
@@ -25,7 +23,7 @@ final readonly class PdoOrderRepository implements OrderRepository
     }
 
     public function create(
-        string $customerName,
+        int $clientId,
         string $description,
         OrderStatus $status,
         int $createdBy
@@ -33,12 +31,12 @@ final readonly class PdoOrderRepository implements OrderRepository
         $statement = $this->connection->prepare(
             <<<'SQL'
             INSERT INTO pedidos (
-                cliente_nome_criptografado,
+                cliente_id,
                 descricao_criptografada,
                 status,
                 criado_por
             ) VALUES (
-                :customer_name,
+                :client_id,
                 :description,
                 :status,
                 :created_by
@@ -47,10 +45,7 @@ final readonly class PdoOrderRepository implements OrderRepository
         );
 
         $statement->execute([
-            'customer_name' => $this->cipher->encrypt(
-                $customerName,
-                self::CUSTOMER_NAME_CONTEXT
-            ),
+            'client_id' => $clientId,
             'description' => $this->cipher->encrypt(
                 $description,
                 self::DESCRIPTION_CONTEXT
@@ -74,7 +69,7 @@ final readonly class PdoOrderRepository implements OrderRepository
 
     public function update(
         int $id,
-        string $customerName,
+        int $clientId,
         string $description,
         OrderStatus $status
     ): ?Order {
@@ -82,7 +77,7 @@ final readonly class PdoOrderRepository implements OrderRepository
             <<<'SQL'
             UPDATE pedidos
             SET
-                cliente_nome_criptografado = :customer_name,
+                cliente_id = :client_id,
                 descricao_criptografada = :description,
                 status = :status,
                 updated_at = UTC_TIMESTAMP()
@@ -92,10 +87,7 @@ final readonly class PdoOrderRepository implements OrderRepository
 
         $statement->execute([
             'id' => $id,
-            'customer_name' => $this->cipher->encrypt(
-                $customerName,
-                self::CUSTOMER_NAME_CONTEXT
-            ),
+            'client_id' => $clientId,
             'description' => $this->cipher->encrypt(
                 $description,
                 self::DESCRIPTION_CONTEXT
@@ -112,7 +104,7 @@ final readonly class PdoOrderRepository implements OrderRepository
             <<<'SQL'
             SELECT
                 id,
-                cliente_nome_criptografado,
+                cliente_id,
                 descricao_criptografada,
                 status,
                 criado_por,
@@ -139,7 +131,7 @@ final readonly class PdoOrderRepository implements OrderRepository
             <<<'SQL'
             SELECT
                 id,
-                cliente_nome_criptografado,
+                cliente_id,
                 descricao_criptografada,
                 status,
                 criado_por,
@@ -163,10 +155,7 @@ final readonly class PdoOrderRepository implements OrderRepository
     {
         return new Order(
             id: (int) $row['id'],
-            customerName: $this->cipher->decrypt(
-                (string) $row['cliente_nome_criptografado'],
-                self::CUSTOMER_NAME_CONTEXT
-            ),
+            clientId: (int) $row['cliente_id'],
             description: $this->cipher->decrypt(
                 (string) $row['descricao_criptografada'],
                 self::DESCRIPTION_CONTEXT
@@ -183,4 +172,5 @@ final readonly class PdoOrderRepository implements OrderRepository
             )
         );
     }
+
 }

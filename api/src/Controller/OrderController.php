@@ -77,7 +77,7 @@ final readonly class OrderController
     {
         return [
             'id' => $order->id,
-            'cliente_nome' => $order->customerName,
+            'cliente_id' => $order->clientId,
             'descricao' => $order->description,
             'status' => $order->status->value,
             'criado_por' => $order->createdBy,

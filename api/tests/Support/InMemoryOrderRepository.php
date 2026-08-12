@@ -18,7 +18,7 @@ final class InMemoryOrderRepository implements OrderRepository
     private int $nextId = 1;
 
     public function create(
-        string $customerName,
+        int $clientId,
         string $description,
         OrderStatus $status,
         int $createdBy
@@ -27,7 +27,7 @@ final class InMemoryOrderRepository implements OrderRepository
 
         $order = new Order(
             id: $this->nextId++,
-            customerName: $customerName,
+            clientId: $clientId,
             description: $description,
             status: $status,
             createdBy: $createdBy,
@@ -42,7 +42,7 @@ final class InMemoryOrderRepository implements OrderRepository
 
     public function update(
         int $id,
-        string $customerName,
+        int $clientId,
         string $description,
         OrderStatus $status
     ): ?Order {
@@ -53,7 +53,7 @@ final class InMemoryOrderRepository implements OrderRepository
 
             $updatedOrder = new Order(
                 id: $order->id,
-                customerName: $customerName,
+                clientId: $clientId,
                 description: $description,
                 status: $status,
                 createdBy: $order->createdBy,

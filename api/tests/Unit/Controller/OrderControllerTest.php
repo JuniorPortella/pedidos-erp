@@ -18,19 +18,26 @@ use App\Service\OrderService;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\InMemoryOrderRepository;
+use Tests\Support\InMemoryClientRepository;
 
 final class OrderControllerTest extends TestCase
 {
     private InMemoryOrderRepository $repository;
     private OrderController $controller;
+    private int $clientId;
 
     protected function setUp(): void
     {
         parent::setUp();
 
+        $clients = new InMemoryClientRepository();
+        $this->clientId = $clients->create(
+            'Cliente Teste',
+            '11999999999'
+        )->id;
         $this->repository = new InMemoryOrderRepository();
         $this->controller = new OrderController(
-            new OrderService($this->repository),
+            new OrderService($this->repository, $clients),
             new OrderInputValidator()
         );
     }
@@ -39,7 +46,7 @@ final class OrderControllerTest extends TestCase
     {
         $createdResponse = $this->controller->create(
             $this->request([
-                'cliente_nome' => 'Cliente Teste',
+                'cliente_id' => $this->clientId,
                 'descricao' => 'Pedido Teste',
                 'status' => 'PENDENTE',
             ]),
@@ -52,8 +59,12 @@ final class OrderControllerTest extends TestCase
         $orderId = $createdBody['order']['id'];
 
         self::assertSame(
-            'Cliente Teste',
-            $createdBody['order']['cliente_nome']
+            $this->clientId,
+            $createdBody['order']['cliente_id']
+        );
+        self::assertArrayNotHasKey(
+            'cliente_nome',
+            $createdBody['order']
         );
         self::assertSame(7, $createdBody['order']['criado_por']);
 
@@ -78,7 +89,7 @@ final class OrderControllerTest extends TestCase
     public function testUpdatesOrder(): void
     {
         $order = $this->repository->create(
-            'Cliente',
+            $this->clientId,
             'Descricao',
             OrderStatus::Pending,
             7
@@ -86,7 +97,7 @@ final class OrderControllerTest extends TestCase
 
         $response = $this->controller->update(
             $this->request([
-                'cliente_nome' => 'Cliente Atualizado',
+                'cliente_id' => $this->clientId,
                 'descricao' => 'Descricao Atualizada',
                 'status' => 'CONCLUIDO',
             ], 'PUT'),

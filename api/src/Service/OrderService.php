@@ -7,12 +7,15 @@ namespace App\Service;
 use App\Dto\OrderInput;
 use App\Entity\Order;
 use App\Exception\OrderNotFoundException;
+use App\Exception\ValidationException;
+use App\Repository\ClientRepository;
 use App\Repository\OrderRepository;
 
 final readonly class OrderService
 {
     public function __construct(
-        private OrderRepository $repository
+        private OrderRepository $repository,
+        private ClientRepository $clients
     ) {
     }
 
@@ -20,8 +23,10 @@ final readonly class OrderService
         OrderInput $input,
         int $createdBy
     ): Order {
+        $this->requireClient($input->clientId);
+
         return $this->repository->create(
-            customerName: $input->customerName,
+            clientId: $input->clientId,
             description: $input->description,
             status: $input->status,
             createdBy: $createdBy
@@ -53,11 +58,12 @@ final readonly class OrderService
         int $id,
         OrderInput $input
     ): Order {
+        $this->requireClient($input->clientId);
         $this->findById($id);
 
         $order = $this->repository->update(
             id: $id,
-            customerName: $input->customerName,
+            clientId: $input->clientId,
             description: $input->description,
             status: $input->status
         );
@@ -69,5 +75,16 @@ final readonly class OrderService
         }
 
         return $order;
+    }
+
+    private function requireClient(int $clientId): void
+    {
+        if ($this->clients->findById($clientId) !== null) {
+            return;
+        }
+
+        throw new ValidationException([
+            'cliente_id' => 'Cliente selecionado nao encontrado.',
+        ]);
     }
 }

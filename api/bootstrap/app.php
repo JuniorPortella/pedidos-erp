@@ -6,6 +6,7 @@ use App\Config\AuthConfig;
 use App\Config\CorsConfig;
 use App\Config\Environment;
 use App\Controller\AuthenticationController;
+use App\Controller\ClientController;
 use App\Controller\OrderController;
 use App\Controller\UserController;
 use App\Database\ConnectionFactory;
@@ -19,6 +20,7 @@ use App\Middleware\AdminAuthorization;
 use App\Middleware\CorsMiddleware;
 use App\Middleware\SecurityHeadersMiddleware;
 use App\Repository\PdoAuthenticationRepository;
+use App\Repository\PdoClientRepository;
 use App\Repository\PdoOrderRepository;
 use App\Repository\PdoRefreshTokenRepository;
 use App\Repository\PdoTokenBlacklistRepository;
@@ -29,6 +31,8 @@ use App\Security\DataCipher;
 use App\Security\LookupHasher;
 use App\Security\PdoLoginRateLimiter;
 use App\Service\AuthenticationService;
+use App\Service\ClientInputValidator;
+use App\Service\ClientService;
 use App\Service\CreateUserInputValidator;
 use App\Service\JwtService;
 use App\Service\OrderInputValidator;
@@ -116,6 +120,20 @@ $userController = new UserController(
     )
 );
 
+$clientRepository = new PdoClientRepository(
+    $connection,
+    new DataCipher(
+        Environment::getRequired(
+            'DATA_ENCRYPTION_KEY'
+        )
+    )
+);
+
+$clientController = new ClientController(
+    new ClientService($clientRepository),
+    new ClientInputValidator()
+);
+
 $orderController = new OrderController(
     new OrderService(
         new PdoOrderRepository(
@@ -125,7 +143,8 @@ $orderController = new OrderController(
                     'DATA_ENCRYPTION_KEY'
                 )
             )
-        )
+        ),
+        $clientRepository
     ),
     new OrderInputValidator()
 );
@@ -143,6 +162,7 @@ $registerRoutes(
     $router,
     $authenticationController,
     $userController,
+    $clientController,
     $orderController,
     $accessTokenMiddleware,
     $adminAuthorization,

@@ -6,14 +6,12 @@ namespace App\Entity;
 
 use DateTimeImmutable;
 
-final readonly class Order
+final readonly class Client
 {
     public function __construct(
         public int $id,
-        public int $clientId,
-        public string $description,
-        public OrderStatus $status,
-        public int $createdBy,
+        public string $name,
+        public string $phone,
         public DateTimeImmutable $createdAt,
         public DateTimeImmutable $updatedAt
     ) {

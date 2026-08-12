@@ -9,6 +9,7 @@ use App\Database\MigrationRunner;
 use App\Entity\TokenRevocationReason;
 use App\Entity\UserProfile;
 use App\Repository\PdoAuthenticationRepository;
+use App\Repository\PdoClientRepository;
 use App\Repository\PdoRefreshTokenRepository;
 use App\Repository\PdoTokenBlacklistRepository;
 use App\Repository\PdoUserRepository;
@@ -92,8 +93,10 @@ try {
     );
     assertSmoke(
         isset($openApiBody['paths']['/pedidos']['get'])
-            && isset($openApiBody['paths']['/pedidos']['post']),
-        'O contrato OpenAPI nao documentou as rotas de pedidos.'
+            && isset($openApiBody['paths']['/pedidos']['post'])
+            && isset($openApiBody['paths']['/clientes']['get'])
+            && isset($openApiBody['paths']['/clientes']['post']),
+        'O contrato OpenAPI nao documentou as rotas principais.'
     );
     assertSmoke(
         str_starts_with(
@@ -397,6 +400,7 @@ try {
 
     $tables = $statement->fetchAll(PDO::FETCH_COLUMN);
     $requiredTables = [
+        'clientes',
         'pedidos',
         'login_rate_limits',
         'refresh_tokens',
@@ -591,6 +595,15 @@ function verifyHttpAuthorization(
         'GET /pedidos sem token deve responder HTTP 401.'
     );
 
+    [$clientsWithoutAuthenticationStatus] = requestJson(
+        $baseUrl . '/clientes'
+    );
+
+    assertSmoke(
+        $clientsWithoutAuthenticationStatus === 401,
+        'GET /clientes sem token deve responder HTTP 401.'
+    );
+
     $lookupHasher = new LookupHasher(
         Environment::getRequired('DATA_LOOKUP_KEY')
     );
@@ -613,6 +626,7 @@ function verifyHttpAuthorization(
     );
 
     $userIds = [];
+    $clientIds = [];
 
     try {
         $suffix = bin2hex(random_bytes(8));
@@ -680,6 +694,48 @@ function verifyHttpAuthorization(
             'GET /auth/me retornou um usuario inesperado.'
         );
 
+        $clientRepository = new PdoClientRepository(
+            $connection,
+            new DataCipher(
+                Environment::getRequired('DATA_ENCRYPTION_KEY')
+            )
+        );
+        $orderClient = $clientRepository->create(
+            'Cliente do Pedido ' . $suffix,
+            '(11) 97777-1234'
+        );
+        $clientIds[] = $orderClient->id;
+
+        [$clientsStatus, $clientsBody] = requestJson(
+            $baseUrl . '/clientes',
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $clientsStatus === 200
+                && is_array($clientsBody['clients'] ?? null),
+            'OPERADOR deve listar clientes com HTTP 200.'
+        );
+
+        [$operatorCreateClientStatus] = requestJson(
+            $baseUrl . '/clientes',
+            'POST',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Cliente indevido',
+                'telefone' => '11999999999',
+            ]
+        );
+
+        assertSmoke(
+            $operatorCreateClientStatus === 403,
+            'OPERADOR nao deve criar clientes.'
+        );
+
         [$ordersStatus, $ordersBody] = requestJson(
             $baseUrl . '/pedidos',
             requestHeaders: [cookieHeader($operatorCookies)]
@@ -697,7 +753,7 @@ function verifyHttpAuthorization(
             'POST',
             [cookieHeader($operatorCookies)],
             [
-                'cliente_nome' => 'Cliente sem CSRF',
+                'cliente_id' => $orderClient->id,
                 'descricao' => 'Pedido sem CSRF',
                 'status' => 'PENDENTE',
             ]
@@ -717,7 +773,7 @@ function verifyHttpAuthorization(
                     . $operatorCookies['csrf_token'],
             ],
             [
-                'cliente_nome' => '',
+                'cliente_id' => 0,
                 'descricao' => '',
                 'status' => 'CANCELADO',
             ]
@@ -728,7 +784,7 @@ function verifyHttpAuthorization(
             'Pedido invalido deve responder HTTP 422.'
         );
         assertSmoke(
-            isset($invalidOrderBody['fields']['cliente_nome'])
+            isset($invalidOrderBody['fields']['cliente_id'])
                 && isset($invalidOrderBody['fields']['descricao'])
                 && isset($invalidOrderBody['fields']['status']),
             'Pedido invalido deve identificar todos os campos.'
@@ -743,7 +799,7 @@ function verifyHttpAuthorization(
                     . $operatorCookies['csrf_token'],
             ],
             [
-                'cliente_nome' => 'Cliente Smoke',
+                'cliente_id' => $orderClient->id,
                 'descricao' => 'Pedido criado pelo smoke test',
                 'status' => 'PENDENTE',
             ]
@@ -765,6 +821,11 @@ function verifyHttpAuthorization(
                 === $operator->id,
             'Pedido nao foi vinculado ao usuario autenticado.'
         );
+        assertSmoke(
+            ($createOrderBody['order']['cliente_id'] ?? null)
+                === $orderClient->id,
+            'Pedido nao foi vinculado ao cliente selecionado.'
+        );
 
         [$showOrderStatus, $showOrderBody] = requestJson(
             $baseUrl . '/pedidos/' . $orderId,
@@ -783,7 +844,7 @@ function verifyHttpAuthorization(
             'PUT',
             [cookieHeader($operatorCookies)],
             [
-                'cliente_nome' => 'Cliente Smoke',
+                'cliente_id' => $orderClient->id,
                 'descricao' => 'Atualizacao sem CSRF',
                 'status' => 'EM_PROCESSAMENTO',
             ]
@@ -803,7 +864,7 @@ function verifyHttpAuthorization(
                     . $operatorCookies['csrf_token'],
             ],
             [
-                'cliente_nome' => 'Cliente Smoke Atualizado',
+                'cliente_id' => $orderClient->id,
                 'descricao' => 'Pedido atualizado pelo smoke test',
                 'status' => 'CONCLUIDO',
             ]
@@ -912,6 +973,139 @@ function verifyHttpAuthorization(
 
         assertAuthenticationCookies($adminCookies);
 
+        [$clientWithoutCsrfStatus] = requestJson(
+            $baseUrl . '/clientes',
+            'POST',
+            [cookieHeader($adminCookies)],
+            [
+                'nome' => 'Cliente sem CSRF',
+                'telefone' => '11999999999',
+            ]
+        );
+
+        assertSmoke(
+            $clientWithoutCsrfStatus === 403,
+            'POST /clientes sem CSRF deve responder HTTP 403.'
+        );
+
+        [$invalidClientStatus, $invalidClientBody] = requestJson(
+            $baseUrl . '/clientes',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => '',
+                'telefone' => 'invalido',
+            ]
+        );
+
+        assertSmoke(
+            $invalidClientStatus === 422
+                && isset($invalidClientBody['fields']['nome'])
+                && isset($invalidClientBody['fields']['telefone']),
+            'Cliente invalido deve identificar nome e telefone.'
+        );
+
+        $clientName = 'Cliente Smoke ' . $suffix;
+        $clientPhone = '(11) 99999-1234';
+
+        [$createClientStatus, $createClientBody] = requestJson(
+            $baseUrl . '/clientes',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => $clientName,
+                'telefone' => $clientPhone,
+            ]
+        );
+
+        assertSmoke(
+            $createClientStatus === 201,
+            'ADMIN deve criar cliente com HTTP 201.'
+        );
+
+        $clientId = $createClientBody['client']['id'] ?? null;
+
+        assertSmoke(
+            is_int($clientId) && $clientId > 0,
+            'POST /clientes nao retornou um id valido.'
+        );
+        $clientIds[] = $clientId;
+
+        $encryptedClientStatement = $connection->prepare(
+            <<<'SQL'
+            SELECT
+                nome_criptografado,
+                telefone_criptografado
+            FROM clientes
+            WHERE id = :id
+            SQL
+        );
+        $encryptedClientStatement->execute(['id' => $clientId]);
+        $encryptedClient = $encryptedClientStatement->fetch();
+
+        assertSmoke(
+            is_array($encryptedClient)
+                && $encryptedClient['nome_criptografado']
+                    !== $clientName
+                && $encryptedClient['telefone_criptografado']
+                    !== $clientPhone,
+            'Nome e telefone do cliente foram persistidos em texto puro.'
+        );
+
+        [$updateClientStatus, $updateClientBody] = requestJson(
+            $baseUrl . '/clientes/' . $clientId,
+            'PUT',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Cliente Smoke Atualizado',
+                'telefone' => '(11) 98888-4321',
+            ]
+        );
+
+        assertSmoke(
+            $updateClientStatus === 200
+                && ($updateClientBody['client']['nome'] ?? null)
+                    === 'Cliente Smoke Atualizado',
+            'PUT /clientes/{id} nao atualizou o cliente.'
+        );
+
+        [$deleteClientStatus] = requestJson(
+            $baseUrl . '/clientes/' . $clientId,
+            'DELETE',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ]
+        );
+
+        assertSmoke(
+            $deleteClientStatus === 204,
+            'DELETE /clientes/{id} deve responder HTTP 204.'
+        );
+
+        [$deleteClientAgainStatus] = requestJson(
+            $baseUrl . '/clientes/' . $clientId,
+            'DELETE',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ]
+        );
+
+        assertSmoke(
+            $deleteClientAgainStatus === 404,
+            'Cliente excluido deve responder HTTP 404.'
+        );
+
         [$crossSessionCsrfStatus] = requestJson(
             $baseUrl . '/pedidos',
             'POST',
@@ -926,7 +1120,7 @@ function verifyHttpAuthorization(
                     . $adminCookies['csrf_token'],
             ],
             [
-                'cliente_nome' => 'Sessao cruzada',
+                'cliente_id' => $orderClient->id,
                 'descricao' => 'CSRF de outra sessao',
                 'status' => 'PENDENTE',
             ]
@@ -1319,6 +1513,7 @@ function verifyHttpAuthorization(
         );
     } finally {
         deleteSmokeUsers($connection, $userIds);
+        deleteSmokeClients($connection, $clientIds);
     }
 }
 
@@ -1422,6 +1617,31 @@ function deleteSmokeUsers(
         )
     );
     $users->execute($userIds);
+}
+
+/**
+ * @param list<int> $clientIds
+ */
+function deleteSmokeClients(
+    PDO $connection,
+    array $clientIds
+): void {
+    if ($clientIds === []) {
+        return;
+    }
+
+    $placeholders = implode(
+        ', ',
+        array_fill(0, count($clientIds), '?')
+    );
+
+    $statement = $connection->prepare(
+        sprintf(
+            'DELETE FROM clientes WHERE id IN (%s)',
+            $placeholders
+        )
+    );
+    $statement->execute($clientIds);
 }
 
 function verifyLogoutSecurity(PDO $connection): void

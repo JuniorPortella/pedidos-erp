@@ -1,6 +1,7 @@
 import {
   Add,
   ArrowForward,
+  ContactsOutlined,
   Inventory2Outlined,
   PeopleAltOutlined,
   SecurityOutlined,
@@ -76,6 +77,25 @@ export function HomePage() {
 
         <Grid size={{ xs: 12, md: 5 }}>
           <Stack spacing={2.5} sx={{ height: '100%' }}>
+            {user?.perfil === 'ADMIN' && (
+              <Card>
+                <CardActionArea onClick={() => navigate('/clientes')}>
+                  <CardContent>
+                    <Stack direction="row" alignItems="center" spacing={1.5}>
+                      <ContactsOutlined color="primary" />
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="h3">Gerenciar clientes</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Cadastre nomes e telefones para os pedidos.
+                        </Typography>
+                      </Box>
+                      <ArrowForward fontSize="small" color="primary" />
+                    </Stack>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            )}
+
             <Card>
               <CardContent>
                 <Stack direction="row" alignItems="center" spacing={1.5}>

@@ -10,7 +10,7 @@ use App\Entity\OrderStatus;
 interface OrderRepository
 {
     public function create(
-        string $customerName,
+        int $clientId,
         string $description,
         OrderStatus $status,
         int $createdBy
@@ -18,7 +18,7 @@ interface OrderRepository
 
     public function update(
         int $id,
-        string $customerName,
+        int $clientId,
         string $description,
         OrderStatus $status
     ): ?Order;

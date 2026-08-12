@@ -9,7 +9,7 @@ use App\Entity\OrderStatus;
 final readonly class OrderInput
 {
     public function __construct(
-        public string $customerName,
+        public int $clientId,
         public string $description,
         public OrderStatus $status
     ) {

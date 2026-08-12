@@ -21,10 +21,18 @@ export type OrderStatus =
 
 export interface Order {
   id: number;
-  cliente_nome: string;
+  cliente_id: number;
   descricao: string;
   status: OrderStatus;
   criado_por: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Client {
+  id: number;
+  nome: string;
+  telefone: string;
   created_at: string;
   updated_at: string;
 }

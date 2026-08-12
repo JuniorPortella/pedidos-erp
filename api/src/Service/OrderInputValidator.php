@@ -15,9 +15,8 @@ final readonly class OrderInputValidator
      */
     public function validate(array $data): OrderInput
     {
-        $customerName = $this->readTrimmedString(
-            $data,
-            'cliente_nome'
+        $clientId = $this->readPositiveInteger(
+            $data['cliente_id'] ?? null
         );
 
         $description = $this->readTrimmedString(
@@ -32,14 +31,9 @@ final readonly class OrderInputValidator
         $status = OrderStatus::tryFrom($statusValue);
         $errors = [];
 
-        if ($customerName === '') {
-            $errors['cliente_nome'] =
-                'Informe o nome do cliente.';
-        } elseif (
-            mb_strlen($customerName, 'UTF-8') > 120
-        ) {
-            $errors['cliente_nome'] =
-                'O nome do cliente deve possuir no maximo 120 caracteres.';
+        if ($clientId === null) {
+            $errors['cliente_id'] =
+                'Selecione um cliente.';
         }
 
         if ($description === '') {
@@ -62,10 +56,32 @@ final readonly class OrderInputValidator
         }
 
         return new OrderInput(
-            customerName: $customerName,
+            clientId: $clientId,
             description: $description,
             status: $status
         );
+    }
+
+    private function readPositiveInteger(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+
+        if (
+            !is_string($value)
+            || preg_match('/\A[1-9][0-9]*\z/', $value) !== 1
+        ) {
+            return null;
+        }
+
+        $integer = filter_var(
+            $value,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        return is_int($integer) ? $integer : null;
     }
 
     /**
