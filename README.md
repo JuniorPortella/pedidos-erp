@@ -38,6 +38,7 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - autorização por perfil `ADMIN` e `OPERADOR`;
 - rota autenticada para consultar a sessão atual;
 - listagem de usuários restrita ao perfil `ADMIN`;
+- comando de terminal para criar administradores sem cadastro público;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
@@ -51,7 +52,9 @@ pedidos e frontend.
 PedidosFull/
 |-- api/
 |   |-- bootstrap/app.php                  # Montagem da aplicação
-|   |-- bin/migrate.php                   # Comando de migrations
+|   |-- bin/
+|   |   |-- create-admin.php              # Criação segura de administrador
+|   |   `-- migrate.php                   # Comando de migrations
 |   |-- database/migrations/              # Alterações versionadas do banco
 |   |-- docker/apache/                    # VirtualHost do Apache
 |   |-- public/index.php                  # Ponto de entrada da API
@@ -60,6 +63,8 @@ PedidosFull/
 |   |   |-- Config/
 |   |   |   |-- AuthConfig.php             # Configuração segura da autenticação
 |   |   |   `-- Environment.php            # Leitura e validação do ambiente
+|   |   |-- Console/
+|   |   |   `-- CreateAdminCommand.php     # Regra do comando administrativo
 |   |   |-- Controller/
 |   |   |   |-- AuthenticationController.php
 |   |   |   `-- UserController.php
@@ -205,6 +210,18 @@ docker compose exec api php bin/migrate.php
 O comando cria as tabelas pendentes e registra cada versão em
 `schema_migrations`. Execuções seguintes ignoram migrations já aplicadas.
 
+Crie o primeiro administrador pelo terminal:
+
+```bash
+docker compose exec api php bin/create-admin.php
+```
+
+O comando solicita nome, e-mail, usuário, senha e confirmação. A senha fica
+oculta durante a digitação, não é recebida como argumento do processo e é
+armazenada somente como hash. O perfil é sempre definido como `ADMIN`. O mesmo
+comando pode criar outro administrador quando necessário, mas exige acesso ao
+servidor ou ao contêiner e não fica disponível como rota pública.
+
 Deixei a API disponível em:
 
 ```text
@@ -274,7 +291,8 @@ Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários, JWT, CSRF, login, renovação de tokens, request, response, router,
 logout, autenticação do access token, autorização por perfil, tratamento de
-erros, aplicação HTTP, logging e cookies de autenticação.
+erros, comando de criação de administrador, aplicação HTTP, logging e cookies
+de autenticação.
 Os testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`,
 escopo, expiração, remoção e codificação contra injeção. Os testes de integração
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
@@ -284,7 +302,7 @@ tokens, além de inserção, consulta e limpeza da blacklist.
 Resultado atual:
 
 ```text
-OK (182 tests, 601 assertions)
+OK (186 tests, 614 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
