@@ -8,10 +8,12 @@ use App\Exception\InvalidCredentialsException;
 use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
+use App\Exception\ForbiddenException;
 use App\Exception\MethodNotAllowedException;
 use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
+use App\Exception\UnauthenticatedException;
 use App\Exception\ValidationException;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -54,6 +56,24 @@ final readonly class ErrorHandler
                     'error' => 'Usuario ou senha invalidos.',
                 ],
                 401
+            );
+        }
+
+        if ($exception instanceof UnauthenticatedException) {
+            return Response::json(
+                [
+                    'error' => 'Autenticacao necessaria.',
+                ],
+                401
+            );
+        }
+
+        if ($exception instanceof ForbiddenException) {
+            return Response::json(
+                [
+                    'error' => 'Acesso nao permitido.',
+                ],
+                403
             );
         }
 

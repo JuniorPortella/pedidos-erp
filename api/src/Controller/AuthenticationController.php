@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Dto\AuthenticationResult;
+use App\Dto\AuthenticatedUser;
 use App\Entity\User;
 use App\Exception\ValidationException;
 use App\Http\AuthenticationCookieService;
@@ -67,6 +68,16 @@ final readonly class AuthenticationController
         return $this->cookies->clearAuthenticationCookies(
             Response::empty()
         );
+    }
+
+    public function me(
+        AuthenticatedUser $authenticatedUser
+    ): Response {
+        return Response::json([
+            'user' => $this->userData(
+                $authenticatedUser->user
+            ),
+        ]);
     }
 
     /**

@@ -33,12 +33,17 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - controller de autenticação para login, refresh e logout;
 - proteção CSRF por cookie e header nos endpoints sensíveis;
 - rotas HTTP de login, refresh e logout conectadas;
+- autenticação de rotas pelo access token armazenado em cookie;
+- consulta da blacklist e do usuário ativo em cada requisição protegida;
+- autorização por perfil `ADMIN` e `OPERADOR`;
+- rota autenticada para consultar a sessão atual;
+- listagem de usuários restrita ao perfil `ADMIN`;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar atualização e exclusão de usuários, autorização dos
-endpoints protegidos, pedidos e frontend.
+Ainda vou implementar criação, atualização e exclusão de usuários pela API,
+pedidos e frontend.
 
 ## Estrutura
 
@@ -56,11 +61,13 @@ PedidosFull/
 |   |   |   |-- AuthConfig.php             # Configuração segura da autenticação
 |   |   |   `-- Environment.php            # Leitura e validação do ambiente
 |   |   |-- Controller/
-|   |   |   `-- AuthenticationController.php
+|   |   |   |-- AuthenticationController.php
+|   |   |   `-- UserController.php
 |   |   |-- Database/
 |   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
 |   |   |   `-- MigrationRunner.php       # Execução das migrations
 |   |   |-- Dto/
+|   |   |   |-- AuthenticatedUser.php       # Usuário e token da requisição
 |   |   |   |-- AuthenticationResult.php   # Resultado do login e refresh
 |   |   |   |-- CreateUserInput.php        # Dados validados do cadastro
 |   |   |   |-- IssuedToken.php            # Token emitido e seus metadados
@@ -82,6 +89,7 @@ PedidosFull/
 |   |   |   `-- ValidationException.php
 |   |   |-- Http/                         # Entrada e saída HTTP da aplicação
 |   |   |-- Logging/                      # Configuração do Monolog
+|   |   |-- Middleware/                   # Autenticação e autorização
 |   |   |-- Repository/
 |   |   |   |-- AuthenticationRepository.php
 |   |   |   |-- PdoAuthenticationRepository.php
@@ -215,6 +223,8 @@ http://localhost:18080
 | `POST` | `/auth/login` | Autentica e cria os cookies da sessão |
 | `POST` | `/auth/refresh` | Rotaciona os tokens com proteção CSRF |
 | `POST` | `/auth/logout` | Revoga a sessão com proteção CSRF |
+| `GET` | `/auth/me` | Retorna o usuário autenticado |
+| `GET` | `/usuarios` | Lista usuários; exige perfil `ADMIN` |
 
 Teste rápido:
 
@@ -250,8 +260,11 @@ incluindo o cabeçalho `Allow`, e confirma que essas respostas públicas não
 criam cookies. Ele também consulta o MySQL com PDO, confirma que não há
 migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
 em uma transação temporária para validar a revogação e a blacklist. O smoke
-também confirma que login, refresh e logout chegam aos respectivos controles de
-validação e segurança. Para executar PHPUnit e o smoke test em sequência:
+também cria usuários temporários para confirmar autenticação obrigatória,
+bloqueio de token inválido ou revogado, acesso comum do `OPERADOR`, bloqueio do
+`OPERADOR` em rota administrativa e acesso permitido ao `ADMIN`. Esses usuários
+e seus tokens são removidos ao final da execução. Para executar PHPUnit e o
+smoke test em sequência:
 
 ```bash
 docker compose exec api composer check
@@ -260,7 +273,8 @@ docker compose exec api composer check
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários, JWT, CSRF, login, renovação de tokens, request, response, router,
-logout, tratamento de erros, aplicação HTTP, logging e cookies de autenticação.
+logout, autenticação do access token, autorização por perfil, tratamento de
+erros, aplicação HTTP, logging e cookies de autenticação.
 Os testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`,
 escopo, expiração, remoção e codificação contra injeção. Os testes de integração
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
@@ -270,7 +284,7 @@ tokens, além de inserção, consulta e limpeza da blacklist.
 Resultado atual:
 
 ```text
-OK (169 tests, 554 assertions)
+OK (182 tests, 601 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -328,18 +342,21 @@ consulta se o usuário continua ativo, preserva a família, invalida o token
 usado e emite um novo par de tokens com um novo CSRF. O logout já revoga a
 família do refresh e bloqueia o access token ainda válido. Login, refresh e
 logout já estão conectados à camada HTTP com cookies `HttpOnly`, `SameSite` e
-validação CSRF por double-submit. Ainda vou restringir o CORS à origem do
-frontend e validar o access token nos endpoints de negócio.
+validação CSRF por double-submit. Nas rotas protegidas, o middleware valida o
+access token, consulta a blacklist e carrega o usuário atual do banco. Assim,
+desativação e mudança de perfil têm efeito sem esperar o JWT expirar. A
+autorização administrativa compara o perfil atual com `ADMIN`. Ainda vou
+restringir o CORS à origem do frontend.
 
 ## Limitações atuais
 
 A base de domínio, persistência e autenticação está em construção e ainda não
 representa a aplicação completa. Neste momento:
 
-- apenas as rotas técnicas e de autenticação estão expostas;
-- ainda não existe middleware de autenticação para os endpoints de negócio;
-- a blacklist está persistida, mas será consultada pelo middleware de acesso;
-- autorização por perfil e CORS ainda não estão conectados à camada HTTP;
+- estão expostas as rotas técnicas, de autenticação e a listagem administrativa
+  de usuários;
+- criação, atualização e exclusão de usuários ainda não estão expostas;
+- o CORS ainda não está restrito à origem do frontend;
 - a regra de pedidos, o frontend React e a refatoração legada ainda serão
   desenvolvidos.
 
@@ -348,7 +365,6 @@ representa a aplicação completa. Neste momento:
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar middleware de acesso e autorização por perfil;
 - implementar controllers e endpoints de cadastro de usuários;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - ampliar os testes unitários e criar testes de integração dos endpoints;

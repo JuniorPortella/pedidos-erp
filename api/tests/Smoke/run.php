@@ -6,6 +6,7 @@ use App\Config\AuthConfig;
 use App\Config\Environment;
 use App\Database\ConnectionFactory;
 use App\Database\MigrationRunner;
+use App\Entity\TokenRevocationReason;
 use App\Entity\UserProfile;
 use App\Repository\PdoAuthenticationRepository;
 use App\Repository\PdoRefreshTokenRepository;
@@ -223,6 +224,14 @@ try {
 
     writeSuccess('Schema minimo esta disponivel');
 
+    verifyHttpAuthorization(
+        $baseUrl,
+        $connection
+    );
+    writeSuccess(
+        'Rotas protegidas aplicaram autenticacao e perfis'
+    );
+
     verifyLogoutSecurity($connection);
     writeSuccess('Logout revogou refresh e bloqueou access token');
 
@@ -245,20 +254,42 @@ try {
  * @return array{
  *     0: int,
  *     1: array<string, mixed>,
- *     2: array<string, string>
+ *     2: array<string, string>,
+ *     3: list<string>
  * }
+ * @param list<string> $requestHeaders
+ * @param array<string, mixed>|null $jsonBody
  */
 function requestJson(
     string $url,
-    string $method = 'GET'
+    string $method = 'GET',
+    array $requestHeaders = [],
+    ?array $jsonBody = null
 ): array
 {
+    $httpOptions = [
+        'method' => $method,
+        'ignore_errors' => true,
+        'timeout' => 5,
+    ];
+
+    if ($jsonBody !== null) {
+        $requestHeaders[] = 'Content-Type: application/json';
+        $httpOptions['content'] = json_encode(
+            $jsonBody,
+            JSON_THROW_ON_ERROR
+        );
+    }
+
+    if ($requestHeaders !== []) {
+        $httpOptions['header'] = implode(
+            "\r\n",
+            $requestHeaders
+        );
+    }
+
     $context = stream_context_create([
-        'http' => [
-            'method' => $method,
-            'ignore_errors' => true,
-            'timeout' => 5,
-        ],
+        'http' => $httpOptions,
     ]);
 
     $body = file_get_contents($url, false, $context);
@@ -307,7 +338,316 @@ function requestJson(
         $headers[strtolower(trim($name))] = trim($value);
     }
 
-    return [(int) $matches[1], $decodedBody, $headers];
+    return [
+        (int) $matches[1],
+        $decodedBody,
+        $headers,
+        $http_response_header,
+    ];
+}
+
+function verifyHttpAuthorization(
+    string $baseUrl,
+    PDO $connection
+): void {
+    [$missingStatus, $missingBody] = requestJson(
+        $baseUrl . '/auth/me'
+    );
+
+    assertSmoke(
+        $missingStatus === 401,
+        'GET /auth/me sem token deve responder HTTP 401.'
+    );
+    assertSmoke(
+        ($missingBody['error'] ?? null)
+            === 'Autenticacao necessaria.',
+        'Rota protegida sem token retornou mensagem inesperada.'
+    );
+
+    [$invalidStatus] = requestJson(
+        $baseUrl . '/auth/me',
+        requestHeaders: [
+            'Cookie: access_token=token-invalido',
+        ]
+    );
+
+    assertSmoke(
+        $invalidStatus === 401,
+        'GET /auth/me com token invalido deve responder HTTP 401.'
+    );
+
+    $lookupHasher = new LookupHasher(
+        Environment::getRequired('DATA_LOOKUP_KEY')
+    );
+
+    $users = new PdoUserRepository(
+        $connection,
+        new DataCipher(
+            Environment::getRequired('DATA_ENCRYPTION_KEY')
+        ),
+        $lookupHasher
+    );
+
+    $blacklist = new PdoTokenBlacklistRepository(
+        $connection,
+        $lookupHasher
+    );
+
+    $jwtService = new JwtService(
+        AuthConfig::fromEnvironment()
+    );
+
+    $userIds = [];
+
+    try {
+        $suffix = bin2hex(random_bytes(8));
+        $password = 'SenhaSmoke123';
+
+        $operator = $users->create(
+            'Smoke Operador',
+            sprintf('operator-%s@example.test', $suffix),
+            'smoke_operator_' . $suffix,
+            password_hash($password, PASSWORD_DEFAULT),
+            UserProfile::Operator
+        );
+        $userIds[] = $operator->id;
+
+        $admin = $users->create(
+            'Smoke Admin',
+            sprintf('admin-%s@example.test', $suffix),
+            'smoke_admin_' . $suffix,
+            password_hash($password, PASSWORD_DEFAULT),
+            UserProfile::Admin
+        );
+        $userIds[] = $admin->id;
+
+        [
+            $operatorLoginStatus,
+            $operatorLoginBody,
+            ,
+            $operatorLoginHeaders,
+        ] = requestJson(
+            $baseUrl . '/auth/login',
+            'POST',
+            jsonBody: [
+                'usuario' => $operator->username,
+                'senha' => $password,
+            ]
+        );
+
+        assertSmoke(
+            $operatorLoginStatus === 200,
+            'Login HTTP do OPERADOR deve responder HTTP 200.'
+        );
+        assertSmoke(
+            ($operatorLoginBody['user']['perfil'] ?? null)
+                === 'OPERADOR',
+            'Login HTTP nao retornou o perfil OPERADOR.'
+        );
+
+        $operatorCookies = extractCookies(
+            $operatorLoginHeaders
+        );
+
+        assertAuthenticationCookies($operatorCookies);
+
+        [$meStatus, $meBody] = requestJson(
+            $baseUrl . '/auth/me',
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $meStatus === 200,
+            'OPERADOR deve acessar uma rota autenticada comum.'
+        );
+        assertSmoke(
+            ($meBody['user']['id'] ?? null) === $operator->id,
+            'GET /auth/me retornou um usuario inesperado.'
+        );
+
+        [$operatorUsersStatus, $operatorUsersBody] = requestJson(
+            $baseUrl . '/usuarios',
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $operatorUsersStatus === 403,
+            'OPERADOR nao deve acessar GET /usuarios.'
+        );
+        assertSmoke(
+            ($operatorUsersBody['error'] ?? null)
+                === 'Acesso nao permitido.',
+            'Bloqueio de perfil retornou mensagem inesperada.'
+        );
+
+        [
+            $adminLoginStatus,
+            $adminLoginBody,
+            ,
+            $adminLoginHeaders,
+        ] = requestJson(
+            $baseUrl . '/auth/login',
+            'POST',
+            jsonBody: [
+                'usuario' => $admin->username,
+                'senha' => $password,
+            ]
+        );
+
+        assertSmoke(
+            $adminLoginStatus === 200,
+            'Login HTTP do ADMIN deve responder HTTP 200.'
+        );
+        assertSmoke(
+            ($adminLoginBody['user']['perfil'] ?? null)
+                === 'ADMIN',
+            'Login HTTP nao retornou o perfil ADMIN.'
+        );
+
+        $adminCookies = extractCookies($adminLoginHeaders);
+
+        assertAuthenticationCookies($adminCookies);
+
+        [$adminUsersStatus, $adminUsersBody] = requestJson(
+            $baseUrl . '/usuarios',
+            requestHeaders: [cookieHeader($adminCookies)]
+        );
+
+        assertSmoke(
+            $adminUsersStatus === 200,
+            'ADMIN deve acessar GET /usuarios.'
+        );
+        assertSmoke(
+            is_array($adminUsersBody['users'] ?? null),
+            'GET /usuarios deve retornar uma lista.'
+        );
+
+        $operatorAccessToken =
+            $operatorCookies['access_token'] ?? '';
+
+        $operatorClaims = $jwtService->decodeAccessToken(
+            $operatorAccessToken
+        );
+
+        $blacklist->add(
+            $operatorClaims,
+            TokenRevocationReason::AdminRevoked
+        );
+
+        [$revokedStatus] = requestJson(
+            $baseUrl . '/auth/me',
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $revokedStatus === 401,
+            'Access token revogado deve responder HTTP 401.'
+        );
+    } finally {
+        deleteSmokeUsers($connection, $userIds);
+    }
+}
+
+/**
+ * @param list<string> $responseHeaders
+ * @return array<string, string>
+ */
+function extractCookies(array $responseHeaders): array
+{
+    $cookies = [];
+
+    foreach ($responseHeaders as $header) {
+        if (
+            preg_match(
+                '/\ASet-Cookie:\s*([^=;]+)=([^;]*)/i',
+                $header,
+                $matches
+            ) !== 1
+        ) {
+            continue;
+        }
+
+        $cookies[$matches[1]] = rawurldecode($matches[2]);
+    }
+
+    return $cookies;
+}
+
+/**
+ * @param array<string, string> $cookies
+ */
+function assertAuthenticationCookies(array $cookies): void
+{
+    foreach (
+        ['access_token', 'refresh_token', 'csrf_token']
+        as $cookie
+    ) {
+        assertSmoke(
+            isset($cookies[$cookie]) && $cookies[$cookie] !== '',
+            sprintf('Cookie de autenticacao ausente: %s.', $cookie)
+        );
+    }
+}
+
+/**
+ * @param array<string, string> $cookies
+ */
+function cookieHeader(array $cookies): string
+{
+    $parts = [];
+
+    foreach ($cookies as $name => $value) {
+        $parts[] = sprintf('%s=%s', $name, rawurlencode($value));
+    }
+
+    return 'Cookie: ' . implode('; ', $parts);
+}
+
+/**
+ * @param list<int> $userIds
+ */
+function deleteSmokeUsers(
+    PDO $connection,
+    array $userIds
+): void {
+    if ($userIds === []) {
+        return;
+    }
+
+    $placeholders = implode(
+        ', ',
+        array_fill(0, count($userIds), '?')
+    );
+
+    foreach (
+        ['token_blacklist', 'refresh_tokens']
+        as $table
+    ) {
+        $statement = $connection->prepare(
+            sprintf(
+                'DELETE FROM %s WHERE usuario_id IN (%s)',
+                $table,
+                $placeholders
+            )
+        );
+        $statement->execute($userIds);
+    }
+
+    $orders = $connection->prepare(
+        sprintf(
+            'DELETE FROM pedidos WHERE criado_por IN (%s)',
+            $placeholders
+        )
+    );
+    $orders->execute($userIds);
+
+    $users = $connection->prepare(
+        sprintf(
+            'DELETE FROM usuarios WHERE id IN (%s)',
+            $placeholders
+        )
+    );
+    $users->execute($userIds);
 }
 
 function verifyLogoutSecurity(PDO $connection): void

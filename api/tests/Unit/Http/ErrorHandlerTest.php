@@ -8,10 +8,12 @@ use App\Exception\InvalidCredentialsException;
 use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
+use App\Exception\ForbiddenException;
 use App\Exception\MethodNotAllowedException;
 use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
+use App\Exception\UnauthenticatedException;
 use App\Exception\ValidationException;
 use App\Http\ErrorHandler;
 use App\Http\Request;
@@ -82,6 +84,20 @@ final class ErrorHandlerTest extends TestCase
                 ),
                 401,
                 'Usuario ou senha invalidos.',
+            ],
+            'unauthenticated' => [
+                new UnauthenticatedException(
+                    'Detalhe interno.'
+                ),
+                401,
+                'Autenticacao necessaria.',
+            ],
+            'forbidden' => [
+                new ForbiddenException(
+                    'Detalhe interno.'
+                ),
+                403,
+                'Acesso nao permitido.',
             ],
             'invalid CSRF token' => [
                 new InvalidCsrfTokenException(

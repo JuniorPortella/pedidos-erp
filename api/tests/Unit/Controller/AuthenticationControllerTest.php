@@ -6,6 +6,7 @@ namespace Tests\Unit\Controller;
 
 use App\Config\AuthConfig;
 use App\Controller\AuthenticationController;
+use App\Dto\AuthenticatedUser;
 use App\Dto\IssuedToken;
 use App\Dto\TokenClaims;
 use App\Entity\TokenRevocationReason;
@@ -123,6 +124,41 @@ final class AuthenticationControllerTest extends TestCase
         self::assertStringNotContainsString(
             'csrf_token',
             $response->body()
+        );
+    }
+
+    public function testMeReturnsAuthenticatedUserWithoutTokens(): void
+    {
+        $issuedToken = $this->jwtService->issueAccessToken(
+            $this->user->id,
+            hash('sha256', 'csrf-token')
+        );
+
+        $response = $this->createController()->me(
+            new AuthenticatedUser(
+                $this->user,
+                $this->jwtService->decodeAccessToken(
+                    $issuedToken->value
+                )
+            )
+        );
+
+        self::assertSame(200, $response->status());
+        self::assertSame(
+            [
+                'user' => [
+                    'id' => 10,
+                    'nome' => 'Usuario Operador',
+                    'email' => 'operador@example.com',
+                    'usuario' => 'operador',
+                    'perfil' => 'OPERADOR',
+                ],
+            ],
+            $this->decodeBody($response->body())
+        );
+        self::assertSame(
+            [],
+            $response->headerValues('Set-Cookie')
         );
     }
 
