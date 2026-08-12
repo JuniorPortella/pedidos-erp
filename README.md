@@ -6,7 +6,7 @@ ambiente para rodar com Docker.
 
 ## Estado atual
 
-Até agora, deixei a infraestrutura inicial da API pronta:
+Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 
 - API executando com PHP e Apache;
 - MySQL isolado na rede do Docker;
@@ -52,9 +52,16 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - comando de terminal para criar administradores sem cadastro público;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
-- testes unitários e de integração configurados com PHPUnit.
+- testes unitários e de integração configurados com PHPUnit;
+- frontend React executando com Vite e Material UI;
+- login conectado à API por cookies, CSRF e renovação automática da sessão;
+- rotas protegidas e menu condicionado aos perfis `ADMIN` e `OPERADOR`;
+- layout ERP responsivo inspirado na navegação lateral do AgraTeste;
+- tela inicial, administração de acessos, listagem e formulário de pedidos;
+- estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
+- testes do cliente HTTP e build de produção validados com Vitest e TypeScript.
 
-Ainda vou implementar o frontend e a refatoração do código legado.
+Ainda vou implementar a refatoração do código legado.
 
 ## Estrutura
 
@@ -147,7 +154,18 @@ PedidosFull/
 |   |-- phpunit.xml
 |   |-- .dockerignore
 |   `-- Dockerfile
-|-- frontend/                             # Aplicação React
+|-- frontend/
+|   |-- public/                           # Marca e arquivos públicos
+|   |-- src/
+|   |   |-- app/                          # Rotas e tema do Material UI
+|   |   |-- components/                   # Shell ERP e componentes comuns
+|   |   |-- contexts/                     # Estado da autenticação
+|   |   |-- lib/                          # Cliente HTTP e renovação da sessão
+|   |   |-- pages/                        # Login, início, acessos e pedidos
+|   |   `-- types/                        # Contratos TypeScript da API
+|   |-- Dockerfile
+|   |-- package.json
+|   `-- vite.config.ts
 |-- refatoracao/                          # Refatoração do PHP legado
 |-- .env.example
 |-- compose.yaml
@@ -164,6 +182,13 @@ Estas são as versões que validei no ambiente Docker atual:
 - MySQL 8.4.11 (`mysql:8.4`)
 - PDO MySQL
 - Libsodium
+- Node.js 22.23.2 (`node:22-alpine`)
+- React 18.3.1
+- React Router 7.18
+- TypeScript 5.9
+- Vite 8.2
+- Material UI 7.3
+- Vitest 4.1
 - Docker Compose
 
 Dependências instaladas na API:
@@ -172,8 +197,8 @@ Dependências instaladas na API:
 - Firebase PHP-JWT 7.1
 - Monolog 3.10
 
-Vou criar o frontend com Node.js 22, React 18.3.1, React Router 7, TypeScript,
-Vite e Material UI. Essas dependências ainda não fazem parte do ambiente atual.
+No frontend, uso os componentes do Material UI, os ícones oficiais do pacote
+`@mui/icons-material` e carregamento sob demanda das páginas.
 
 ## Como executar
 
@@ -217,12 +242,13 @@ Configure em `FRONTEND_ORIGIN` a origem exata do frontend, sem barra no final:
 
 ```dotenv
 FRONTEND_ORIGIN=http://localhost:5173
+VITE_API_URL=http://localhost:18080
 ```
 
 Em produção, essa origem deve utilizar HTTPS. Como a autenticação usa cookies,
 o frontend deverá enviar `credentials: 'include'` nas requisições HTTP.
 
-Suba a API e o MySQL:
+Suba o frontend, a API e o MySQL:
 
 ```bash
 docker compose up -d --build --wait --wait-timeout 180
@@ -263,8 +289,15 @@ Deixei a API disponível em:
 http://localhost:18080
 ```
 
-É possível alterar a porta por `API_PORT` no `.env`. Mantive o MySQL na porta
-`3306` apenas dentro da rede Docker, sem publicá-la na máquina.
+Deixei o frontend disponível em:
+
+```text
+http://localhost:5173
+```
+
+É possível alterar as portas por `API_PORT` e `FRONTEND_PORT` no `.env`. A
+variável `VITE_API_URL` informa ao navegador onde a API está publicada. Mantive
+o MySQL na porta `3306` apenas dentro da rede Docker, sem publicá-la na máquina.
 
 ## Rotas atuais
 
@@ -347,6 +380,18 @@ Para executar PHPUnit e o smoke test em sequência:
 docker compose exec api composer check
 ```
 
+Para executar os testes e o build do frontend:
+
+```bash
+docker compose exec frontend npm test
+docker compose exec frontend npm run build
+```
+
+Os testes do frontend confirmam o envio de cookies, o cabeçalho CSRF nas
+operações de escrita, a renovação automática após `401`, o tratamento dos
+erros de validação e a consolidação de requisições simultâneas em uma única
+rotação do refresh token.
+
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
 de usuários e pedidos, JWT, CSRF, login, renovação de tokens, request, response,
@@ -366,6 +411,12 @@ Resultado atual:
 
 ```text
 OK (258 tests, 777 assertions)
+```
+
+O frontend possui atualmente:
+
+```text
+6 tests passed
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -449,19 +500,25 @@ cookies `HttpOnly`, aceita apenas os métodos usados pela API e limita os
 headers enviados pelo frontend a `Content-Type` e `X-CSRF-Token`. Não uso o
 curinga `*`, pois ele não deve ser combinado com cookies de autenticação.
 
+No frontend, concentro as requisições no cliente HTTP de `src/lib/api.ts`. Ele
+sempre usa `credentials: 'include'`, lê somente o cookie público de CSRF e
+renova a sessão quando uma rota protegida retorna `401`. Os JWTs continuam
+inacessíveis ao JavaScript por serem cookies `HttpOnly`. O contexto de
+autenticação mantém o usuário atual e as rotas React impedem a navegação sem
+sessão. O menu de acessos aparece apenas para `ADMIN`, mas essa condição visual
+não substitui a autorização do backend, que continua validando o perfil em
+cada rota administrativa.
+
 ## Limitações atuais
 
-A base de domínio, persistência e autenticação está em construção e ainda não
-representa a aplicação completa. Neste momento:
+A aplicação atende aos fluxos principais do teste, mas ainda possui limitações:
 
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
   completo de usuários e as quatro rotas obrigatórias de pedidos;
-- o frontend React e a refatoração legada ainda serão desenvolvidos;
+- a refatoração do código PHP legado ainda será desenvolvida;
 - paginação, filtros e busca de pedidos ainda não foram implementados.
 
 ## Próximas etapas
 
-Meus próximos passos são:
-
-- desenvolver o frontend em React com Material UI;
-- refatorar o código PHP legado fornecido no teste.
+Meu próximo passo é refatorar o código PHP legado fornecido no teste. Depois,
+vou ampliar os testes de componentes do frontend e revisar a entrega completa.
