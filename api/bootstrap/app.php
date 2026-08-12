@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Config\AuthConfig;
 use App\Config\Environment;
 use App\Controller\AuthenticationController;
+use App\Controller\OrderController;
 use App\Controller\UserController;
 use App\Database\ConnectionFactory;
 use App\Http\Application;
@@ -15,6 +16,7 @@ use App\Logging\LoggerFactory;
 use App\Middleware\AccessTokenMiddleware;
 use App\Middleware\AdminAuthorization;
 use App\Repository\PdoAuthenticationRepository;
+use App\Repository\PdoOrderRepository;
 use App\Repository\PdoRefreshTokenRepository;
 use App\Repository\PdoTokenBlacklistRepository;
 use App\Repository\PdoUserRepository;
@@ -25,6 +27,8 @@ use App\Security\LookupHasher;
 use App\Service\AuthenticationService;
 use App\Service\CreateUserInputValidator;
 use App\Service\JwtService;
+use App\Service\OrderInputValidator;
+use App\Service\OrderService;
 use App\Service\PasswordPolicy;
 use App\Service\UpdateUserInputValidator;
 use App\Service\UserService;
@@ -100,6 +104,20 @@ $userController = new UserController(
     )
 );
 
+$orderController = new OrderController(
+    new OrderService(
+        new PdoOrderRepository(
+            $connection,
+            new DataCipher(
+                Environment::getRequired(
+                    'DATA_ENCRYPTION_KEY'
+                )
+            )
+        )
+    ),
+    new OrderInputValidator()
+);
+
 $registerRoutes = require dirname(__DIR__)
     . '/routes/api.php';
 
@@ -113,6 +131,7 @@ $registerRoutes(
     $router,
     $authenticationController,
     $userController,
+    $orderController,
     $accessTokenMiddleware,
     $adminAuthorization,
     $csrfRequestValidator

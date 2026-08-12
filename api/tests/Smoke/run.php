@@ -378,6 +378,15 @@ function verifyHttpAuthorization(
         'GET /auth/me com token invalido deve responder HTTP 401.'
     );
 
+    [$ordersWithoutAuthenticationStatus] = requestJson(
+        $baseUrl . '/pedidos'
+    );
+
+    assertSmoke(
+        $ordersWithoutAuthenticationStatus === 401,
+        'GET /pedidos sem token deve responder HTTP 401.'
+    );
+
     $lookupHasher = new LookupHasher(
         Environment::getRequired('DATA_LOOKUP_KEY')
     );
@@ -465,6 +474,173 @@ function verifyHttpAuthorization(
         assertSmoke(
             ($meBody['user']['id'] ?? null) === $operator->id,
             'GET /auth/me retornou um usuario inesperado.'
+        );
+
+        [$ordersStatus, $ordersBody] = requestJson(
+            $baseUrl . '/pedidos',
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $ordersStatus === 200
+                && isset($ordersBody['orders'])
+                && is_array($ordersBody['orders']),
+            'OPERADOR deve listar pedidos com HTTP 200.'
+        );
+
+        [$orderWithoutCsrfStatus] = requestJson(
+            $baseUrl . '/pedidos',
+            'POST',
+            [cookieHeader($operatorCookies)],
+            [
+                'cliente_nome' => 'Cliente sem CSRF',
+                'descricao' => 'Pedido sem CSRF',
+                'status' => 'PENDENTE',
+            ]
+        );
+
+        assertSmoke(
+            $orderWithoutCsrfStatus === 403,
+            'POST /pedidos sem CSRF deve responder HTTP 403.'
+        );
+
+        [$invalidOrderStatus, $invalidOrderBody] = requestJson(
+            $baseUrl . '/pedidos',
+            'POST',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ],
+            [
+                'cliente_nome' => '',
+                'descricao' => '',
+                'status' => 'CANCELADO',
+            ]
+        );
+
+        assertSmoke(
+            $invalidOrderStatus === 422,
+            'Pedido invalido deve responder HTTP 422.'
+        );
+        assertSmoke(
+            isset($invalidOrderBody['fields']['cliente_nome'])
+                && isset($invalidOrderBody['fields']['descricao'])
+                && isset($invalidOrderBody['fields']['status']),
+            'Pedido invalido deve identificar todos os campos.'
+        );
+
+        [$createOrderStatus, $createOrderBody] = requestJson(
+            $baseUrl . '/pedidos',
+            'POST',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ],
+            [
+                'cliente_nome' => 'Cliente Smoke',
+                'descricao' => 'Pedido criado pelo smoke test',
+                'status' => 'PENDENTE',
+            ]
+        );
+
+        assertSmoke(
+            $createOrderStatus === 201,
+            'OPERADOR deve criar pedido com HTTP 201.'
+        );
+
+        $orderId = $createOrderBody['order']['id'] ?? null;
+
+        assertSmoke(
+            is_int($orderId) && $orderId > 0,
+            'POST /pedidos nao retornou um id valido.'
+        );
+        assertSmoke(
+            ($createOrderBody['order']['criado_por'] ?? null)
+                === $operator->id,
+            'Pedido nao foi vinculado ao usuario autenticado.'
+        );
+
+        [$showOrderStatus, $showOrderBody] = requestJson(
+            $baseUrl . '/pedidos/' . $orderId,
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $showOrderStatus === 200
+                && ($showOrderBody['order']['id'] ?? null)
+                    === $orderId,
+            'GET /pedidos/{id} nao retornou o pedido criado.'
+        );
+
+        [$updateOrderWithoutCsrfStatus] = requestJson(
+            $baseUrl . '/pedidos/' . $orderId,
+            'PUT',
+            [cookieHeader($operatorCookies)],
+            [
+                'cliente_nome' => 'Cliente Smoke',
+                'descricao' => 'Atualizacao sem CSRF',
+                'status' => 'EM_PROCESSAMENTO',
+            ]
+        );
+
+        assertSmoke(
+            $updateOrderWithoutCsrfStatus === 403,
+            'PUT /pedidos/{id} sem CSRF deve responder HTTP 403.'
+        );
+
+        [$updateOrderStatus, $updateOrderBody] = requestJson(
+            $baseUrl . '/pedidos/' . $orderId,
+            'PUT',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ],
+            [
+                'cliente_nome' => 'Cliente Smoke Atualizado',
+                'descricao' => 'Pedido atualizado pelo smoke test',
+                'status' => 'CONCLUIDO',
+            ]
+        );
+
+        assertSmoke(
+            $updateOrderStatus === 200
+                && ($updateOrderBody['order']['status'] ?? null)
+                    === 'CONCLUIDO',
+            'PUT /pedidos/{id} nao atualizou o pedido.'
+        );
+
+        [$missingOrderStatus, $missingOrderBody] = requestJson(
+            $baseUrl . '/pedidos/999999999',
+            requestHeaders: [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $missingOrderStatus === 404
+                && isset($missingOrderBody['error']),
+            'Pedido inexistente deve responder HTTP 404.'
+        );
+
+        [
+            $deleteOrderStatus,
+            ,
+            $deleteOrderHeaders,
+        ] = requestJson(
+            $baseUrl . '/pedidos/' . $orderId,
+            'DELETE',
+            [cookieHeader($operatorCookies)]
+        );
+
+        assertSmoke(
+            $deleteOrderStatus === 405,
+            'DELETE /pedidos/{id} nao deve ser implementado.'
+        );
+        assertSmoke(
+            ($deleteOrderHeaders['allow'] ?? null)
+                === 'GET, PUT',
+            'DELETE /pedidos/{id} deve informar Allow: GET, PUT.'
         );
 
         [$operatorUsersStatus, $operatorUsersBody] = requestJson(

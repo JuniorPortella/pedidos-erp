@@ -8,6 +8,7 @@ use App\Exception\InvalidCredentialsException;
 use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
+use App\Exception\OrderNotFoundException;
 use App\Exception\ForbiddenException;
 use App\Exception\MethodNotAllowedException;
 use App\Exception\RefreshTokenNotActiveException;
@@ -274,6 +275,21 @@ final class ErrorHandlerTest extends TestCase
         self::assertSame(
             '/pedidos',
             $record->context['path']
+        );
+    }
+
+    public function testMapsMissingOrderToNotFound(): void
+    {
+        $response = $this->errorHandler->handle(
+            new OrderNotFoundException(
+                'Detalhe interno do pedido.'
+            )
+        );
+
+        self::assertSame(404, $response->status());
+        self::assertSame(
+            ['error' => 'Pedido nao encontrado.'],
+            $this->decode($response)
         );
     }
 

@@ -43,12 +43,16 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - exclusão lógica de usuários restrita ao perfil `ADMIN` e protegida por CSRF;
 - proteção contra desativação, exclusão ou remoção do perfil da própria conta;
 - revogação dos refresh tokens ao trocar a senha, desativar ou excluir um usuário;
+- criação, listagem, consulta e atualização de pedidos;
+- acesso aos pedidos permitido para usuários `ADMIN` e `OPERADOR` autenticados;
+- nome do cliente e descrição do pedido criptografados no banco;
+- validação dos três status permitidos para pedidos;
 - comando de terminal para criar administradores sem cadastro público;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar as regras de pedidos e o frontend.
+Ainda vou implementar o frontend e a refatoração do código legado.
 
 ## Estrutura
 
@@ -71,6 +75,7 @@ PedidosFull/
 |   |   |   `-- CreateAdminCommand.php     # Regra do comando administrativo
 |   |   |-- Controller/
 |   |   |   |-- AuthenticationController.php
+|   |   |   |-- OrderController.php
 |   |   |   `-- UserController.php
 |   |   |-- Database/
 |   |   |   |-- ConnectionFactory.php     # Criação da conexão PDO
@@ -80,9 +85,12 @@ PedidosFull/
 |   |   |   |-- AuthenticationResult.php   # Resultado do login e refresh
 |   |   |   |-- CreateUserInput.php        # Dados validados do cadastro
 |   |   |   |-- IssuedToken.php            # Token emitido e seus metadados
+|   |   |   |-- OrderInput.php              # Dados validados do pedido
 |   |   |   |-- TokenClaims.php            # Claims validadas do token
 |   |   |   `-- UpdateUserInput.php        # Dados validados da atualização
 |   |   |-- Entity/
+|   |   |   |-- Order.php                   # Entidade de pedido
+|   |   |   |-- OrderStatus.php             # Status permitidos
 |   |   |   |-- TokenRevocationReason.php  # Motivos de revogação
 |   |   |   |-- TokenType.php              # Tipos access e refresh
 |   |   |   |-- User.php                   # Entidade de usuário
@@ -93,6 +101,7 @@ PedidosFull/
 |   |   |   |-- InvalidTokenException.php
 |   |   |   |-- InvalidCredentialsException.php
 |   |   |   |-- MethodNotAllowedException.php
+|   |   |   |-- OrderNotFoundException.php
 |   |   |   |-- RefreshTokenNotActiveException.php
 |   |   |   |-- RefreshTokenReuseException.php
 |   |   |   |-- RouteNotFoundException.php
@@ -104,6 +113,8 @@ PedidosFull/
 |   |   |-- Repository/
 |   |   |   |-- AuthenticationRepository.php
 |   |   |   |-- PdoAuthenticationRepository.php
+|   |   |   |-- OrderRepository.php         # Contrato de pedidos
+|   |   |   |-- PdoOrderRepository.php      # Persistência criptografada
 |   |   |   |-- PdoRefreshTokenRepository.php
 |   |   |   |-- PdoTokenBlacklistRepository.php
 |   |   |   |-- RefreshTokenRepository.php
@@ -119,6 +130,8 @@ PedidosFull/
 |   |       |-- AuthenticationService.php   # Regras de autenticação
 |   |       |-- CreateUserInputValidator.php
 |   |       |-- JwtService.php              # Emissão e validação de JWT
+|   |       |-- OrderInputValidator.php
+|   |       |-- OrderService.php             # Regras de pedidos
 |   |       |-- PasswordPolicy.php           # Política compartilhada de senha
 |   |       |-- UpdateUserInputValidator.php
 |   |       `-- UserService.php             # Regras de usuários
@@ -255,6 +268,12 @@ http://localhost:18080
 | `POST` | `/usuarios` | Cria usuário; exige `ADMIN` e proteção CSRF |
 | `PUT` | `/usuarios/{id}` | Atualiza usuário; exige `ADMIN` e proteção CSRF |
 | `DELETE` | `/usuarios/{id}` | Exclui usuário logicamente; exige `ADMIN` e proteção CSRF |
+| `GET` | `/pedidos` | Lista pedidos; exige autenticação |
+| `POST` | `/pedidos` | Cria pedido; exige autenticação e proteção CSRF |
+| `GET` | `/pedidos/{id}` | Detalha pedido; exige autenticação |
+| `PUT` | `/pedidos/{id}` | Atualiza pedido; exige autenticação e proteção CSRF |
+
+Não implementei `DELETE /pedidos`, conforme solicitado no teste técnico.
 
 Teste rápido:
 
@@ -296,8 +315,10 @@ bloqueio de token inválido ou revogado, acesso comum do `OPERADOR`, bloqueio do
 valida a criação administrativa de usuário, política de senha, proteção CSRF e
 duplicidade de e-mail e usuário. Também valida atualização, troca de senha,
 exclusão lógica, revogação da sessão e proteção da própria conta do
-administrador. Os registros temporários e seus tokens são removidos ao final
-da execução. Para executar PHPUnit e o smoke test em sequência:
+administrador. Para pedidos, testa autenticação, CSRF, validação, criação por
+`OPERADOR`, listagem, detalhe, atualização, resposta `404` e a ausência do
+endpoint `DELETE`. Os registros temporários, pedidos e tokens são removidos ao
+final da execução. Para executar PHPUnit e o smoke test em sequência:
 
 ```bash
 docker compose exec api composer check
@@ -305,7 +326,7 @@ docker compose exec api composer check
 
 Atualmente, a suíte possui testes unitários para variáveis de ambiente,
 criptografia autenticada, hashes de consulta, entidades, validação e services
-de usuários, JWT, CSRF, login, renovação de tokens, request, response, router,
+de usuários e pedidos, JWT, CSRF, login, renovação de tokens, request, response, router,
 logout, autenticação do access token, autorização por perfil, tratamento de
 erros, comando de criação de administrador, aplicação HTTP, logging e cookies
 de autenticação.
@@ -313,12 +334,14 @@ Os testes de cookies verificam atributos `HttpOnly`, `Secure`, `SameSite`,
 escopo, expiração, remoção e codificação contra injeção. Os testes de integração
 validam a conexão PDO, a persistência e a autenticação com um MySQL real,
 incluindo registro, rotação, revogação, reutilização e limpeza de refresh
-tokens, além de inserção, consulta e limpeza da blacklist.
+tokens, além de inserção, consulta e limpeza da blacklist. A persistência de
+pedidos é testada com o MySQL real e inclui verificação de que nome do cliente
+e descrição não são armazenados em texto puro.
 
 Resultado atual:
 
 ```text
-OK (222 tests, 698 assertions)
+OK (241 tests, 744 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -363,6 +386,12 @@ Essa criptografia será uma das medidas de segurança do projeto, junto com
 controle de acesso por perfil, exclusão lógica de usuários e logs sem
 informações sensíveis.
 
+Nos pedidos, criptografo o nome do cliente e a descrição antes de persistir e
+descriptografo somente ao montar as entidades retornadas pela API. Todas as
+operações de escrita usam prepared statements. O campo `criado_por` registra o
+usuário autenticado que criou o pedido, enquanto `ADMIN` e `OPERADOR` podem
+acessar as quatro rotas exigidas no teste.
+
 Para a autenticação, escolhi separar access e refresh tokens e armazená-los em
 cookies `HttpOnly`. A configuração exige cookies `Secure`, debug desativado e
 CSRF ativo em produção. A emissão e a validação criptográfica dos dois tipos de
@@ -396,17 +425,16 @@ acesso administrativo.
 A base de domínio, persistência e autenticação está em construção e ainda não
 representa a aplicação completa. Neste momento:
 
-- estão expostas as rotas técnicas, de autenticação e o cadastro administrativo
-  completo de usuários;
+- estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
+  completo de usuários e as quatro rotas obrigatórias de pedidos;
 - o CORS ainda não está restrito à origem do frontend;
-- a regra de pedidos, o frontend React e a refatoração legada ainda serão
-  desenvolvidos.
+- o frontend React e a refatoração legada ainda serão desenvolvidos;
+- paginação, filtros e busca de pedidos ainda não foram implementados.
 
 ## Próximas etapas
 
 Meus próximos passos são:
 
-- implementar criação, listagem, consulta e atualização de pedidos;
-- ampliar os testes unitários e criar testes de integração dos endpoints;
+- restringir o CORS à origem configurada para o frontend;
 - desenvolver o frontend em React com Material UI;
 - refatorar o código PHP legado fornecido no teste.

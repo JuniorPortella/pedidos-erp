@@ -10,6 +10,7 @@ use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
 use App\Exception\ForbiddenException;
 use App\Exception\MethodNotAllowedException;
+use App\Exception\OrderNotFoundException;
 use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
@@ -127,6 +128,15 @@ final readonly class ErrorHandler
             return Response::json(
                 [
                     'error' => 'Usuario nao encontrado.',
+                ],
+                404
+            );
+        }
+
+        if ($exception instanceof OrderNotFoundException) {
+            return Response::json(
+                [
+                    'error' => 'Pedido nao encontrado.',
                 ],
                 404
             );

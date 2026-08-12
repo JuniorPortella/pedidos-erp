@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Controller\AuthenticationController;
+use App\Controller\OrderController;
 use App\Controller\UserController;
 use App\Dto\AuthenticatedUser;
 use App\Http\CsrfRequestValidator;
@@ -16,6 +17,7 @@ return static function (
     Router $router,
     AuthenticationController $authentication,
     UserController $users,
+    OrderController $orders,
     AccessTokenMiddleware $accessToken,
     AdminAuthorization $adminAuthorization,
     CsrfRequestValidator $csrf
@@ -176,6 +178,83 @@ return static function (
                 return $users->delete(
                     $parameters['id'],
                     $authenticatedUser
+                );
+            }
+        )
+    );
+
+    $router->get(
+        '/pedidos',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static fn (
+                AuthenticatedUser $authenticatedUser
+            ): Response => $orders->index()
+        )
+    );
+
+    $router->get(
+        '/pedidos/{id}',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static fn (
+                AuthenticatedUser $authenticatedUser
+            ): Response => $orders->show(
+                $parameters['id']
+            )
+        )
+    );
+
+    $router->post(
+        '/pedidos',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $csrf,
+                $orders
+            ): Response {
+                $csrf->validate($request);
+
+                return $orders->create(
+                    $request,
+                    $authenticatedUser
+                );
+            }
+        )
+    );
+
+    $router->put(
+        '/pedidos/{id}',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $parameters,
+                $csrf,
+                $orders
+            ): Response {
+                $csrf->validate($request);
+
+                return $orders->update(
+                    $request,
+                    $parameters['id']
                 );
             }
         )
