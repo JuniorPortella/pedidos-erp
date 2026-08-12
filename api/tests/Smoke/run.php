@@ -53,7 +53,37 @@ try {
         ),
         'Requisicao sem Origin nao deve receber headers CORS.'
     );
+    assertSmoke(
+        ($healthHeaders['x-content-type-options'] ?? null)
+            === 'nosniff'
+            && ($healthHeaders['x-frame-options'] ?? null)
+                === 'DENY'
+            && ($healthHeaders['cache-control'] ?? null)
+                === 'no-store',
+        'GET /health nao retornou os headers de seguranca.'
+    );
+    assertSmoke(
+        !str_contains(
+            strtolower($healthHeaders['server'] ?? ''),
+            'apache/'
+        )
+            && !isset($healthHeaders['x-powered-by']),
+        'A API revelou versoes do servidor ou do PHP.'
+    );
     writeSuccess('API respondeu ao healthcheck');
+
+    [$unsupportedMediaTypeStatus] = requestJson(
+        $baseUrl . '/auth/login',
+        'POST',
+        ['Content-Type: text/plain'],
+        rawBody: '{"usuario":"teste","senha":"Senha123!"}'
+    );
+
+    assertSmoke(
+        $unsupportedMediaTypeStatus === 415,
+        'JSON sem application/json deve responder HTTP 415.'
+    );
+    writeSuccess('API exigiu Content-Type JSON e ocultou versoes');
 
     [
         $corsStatus,
@@ -332,6 +362,7 @@ try {
     $tables = $statement->fetchAll(PDO::FETCH_COLUMN);
     $requiredTables = [
         'pedidos',
+        'login_rate_limits',
         'refresh_tokens',
         'schema_migrations',
         'token_blacklist',
@@ -390,7 +421,8 @@ function requestJson(
     string $url,
     string $method = 'GET',
     array $requestHeaders = [],
-    ?array $jsonBody = null
+    ?array $jsonBody = null,
+    ?string $rawBody = null
 ): array
 {
     $httpOptions = [
@@ -405,6 +437,16 @@ function requestJson(
             $jsonBody,
             JSON_THROW_ON_ERROR
         );
+    }
+
+    if ($rawBody !== null) {
+        if ($jsonBody !== null) {
+            throw new RuntimeException(
+                'Informe jsonBody ou rawBody, nunca ambos.'
+            );
+        }
+
+        $httpOptions['content'] = $rawBody;
     }
 
     if ($requestHeaders !== []) {
@@ -833,6 +875,31 @@ function verifyHttpAuthorization(
         $adminCookies = extractCookies($adminLoginHeaders);
 
         assertAuthenticationCookies($adminCookies);
+
+        [$crossSessionCsrfStatus] = requestJson(
+            $baseUrl . '/pedidos',
+            'POST',
+            [
+                cookieHeader([
+                    'access_token' =>
+                        $operatorCookies['access_token'],
+                    'csrf_token' =>
+                        $adminCookies['csrf_token'],
+                ]),
+                'X-CSRF-Token: '
+                    . $adminCookies['csrf_token'],
+            ],
+            [
+                'cliente_nome' => 'Sessao cruzada',
+                'descricao' => 'CSRF de outra sessao',
+                'status' => 'PENDENTE',
+            ]
+        );
+
+        assertSmoke(
+            $crossSessionCsrfStatus === 403,
+            'CSRF de outra sessao deve responder HTTP 403.'
+        );
 
         [
             $oldCreateRouteStatus,

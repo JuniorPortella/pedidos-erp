@@ -234,6 +234,7 @@ final class AuthenticationControllerTest extends TestCase
             new Request(
                 'POST',
                 '/auth/login',
+                headers: ['content-type' => 'application/json'],
                 body: '{json-invalido'
             )
         );
@@ -475,6 +476,7 @@ final class AuthenticationControllerTest extends TestCase
         return new Request(
             'POST',
             '/auth/login',
+            headers: ['content-type' => 'application/json'],
             body: json_encode(
                 $body,
                 JSON_THROW_ON_ERROR

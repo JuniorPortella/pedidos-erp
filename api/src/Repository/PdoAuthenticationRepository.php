@@ -10,6 +10,9 @@ use PDO;
 final class PdoAuthenticationRepository implements
     AuthenticationRepository
 {
+    private const DUMMY_PASSWORD_HASH =
+        '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
+
     public function __construct(
         private readonly PDO $connection,
         private readonly UserRepository $userRepository
@@ -40,6 +43,11 @@ final class PdoAuthenticationRepository implements
         $credentials = $statement->fetch();
 
         if ($credentials === false) {
+            password_verify(
+                $password,
+                self::DUMMY_PASSWORD_HASH
+            );
+
             return null;
         }
 

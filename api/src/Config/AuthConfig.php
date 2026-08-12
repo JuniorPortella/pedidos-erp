@@ -17,7 +17,11 @@ final readonly class AuthConfig
         public string $audience,
         public bool $cookieSecure,
         public string $cookieSameSite,
-        public bool $csrfEnabled
+        public bool $csrfEnabled,
+        public int $loginMaxAttempts,
+        public int $loginIpMaxAttempts,
+        public int $loginWindowSeconds,
+        public int $loginBlockSeconds
     ) {
     }
 
@@ -136,8 +140,37 @@ final readonly class AuthConfig
             ),
             cookieSecure: $cookieSecure,
             cookieSameSite: $cookieSameSite,
-            csrfEnabled: $csrfEnabled
+            csrfEnabled: $csrfEnabled,
+            loginMaxAttempts: self::positiveIntegerOrDefault(
+                'AUTH_LOGIN_MAX_ATTEMPTS',
+                5
+            ),
+            loginIpMaxAttempts: self::positiveIntegerOrDefault(
+                'AUTH_LOGIN_IP_MAX_ATTEMPTS',
+                20
+            ),
+            loginWindowSeconds: self::positiveIntegerOrDefault(
+                'AUTH_LOGIN_WINDOW',
+                900
+            ),
+            loginBlockSeconds: self::positiveIntegerOrDefault(
+                'AUTH_LOGIN_BLOCK',
+                900
+            )
         );
+    }
+
+    private static function positiveIntegerOrDefault(
+        string $name,
+        int $default
+    ): int {
+        $value = getenv($name);
+
+        if ($value === false || trim($value) === '') {
+            return $default;
+        }
+
+        return Environment::getPositiveInteger($name);
     }
 
     private static function decodeSecret(

@@ -17,6 +17,7 @@ use App\Logging\LoggerFactory;
 use App\Middleware\AccessTokenMiddleware;
 use App\Middleware\AdminAuthorization;
 use App\Middleware\CorsMiddleware;
+use App\Middleware\SecurityHeadersMiddleware;
 use App\Repository\PdoAuthenticationRepository;
 use App\Repository\PdoOrderRepository;
 use App\Repository\PdoRefreshTokenRepository;
@@ -26,6 +27,7 @@ use App\Routing\Router;
 use App\Security\CsrfTokenService;
 use App\Security\DataCipher;
 use App\Security\LookupHasher;
+use App\Security\PdoLoginRateLimiter;
 use App\Service\AuthenticationService;
 use App\Service\CreateUserInputValidator;
 use App\Service\JwtService;
@@ -81,7 +83,12 @@ $authenticationService = new AuthenticationService(
     $csrfTokens,
     $refreshTokens,
     $userRepository,
-    $blacklist
+    $blacklist,
+    new PdoLoginRateLimiter(
+        $connection,
+        $lookupHasher,
+        $authConfig
+    )
 );
 
 $authenticationController = new AuthenticationController(
@@ -146,5 +153,9 @@ return new Application(
     router: $router,
     errorHandler: new ErrorHandler($logger),
     logger: $logger,
-    cors: $corsMiddleware
+    cors: $corsMiddleware,
+    securityHeaders: new SecurityHeadersMiddleware(
+        strtolower(Environment::getRequired('APP_ENV'))
+            === 'production'
+    )
 );

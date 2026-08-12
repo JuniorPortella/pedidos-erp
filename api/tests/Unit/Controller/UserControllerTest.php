@@ -244,6 +244,7 @@ final class UserControllerTest extends TestCase
         return new Request(
             $method,
             '/usuarios',
+            headers: ['content-type' => 'application/json'],
             body: json_encode($body, JSON_THROW_ON_ERROR)
         );
     }

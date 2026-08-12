@@ -11,10 +11,13 @@ use App\Exception\InvalidTokenException;
 use App\Exception\ForbiddenException;
 use App\Exception\MethodNotAllowedException;
 use App\Exception\OrderNotFoundException;
+use App\Exception\PayloadTooLargeException;
 use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
+use App\Exception\TooManyLoginAttemptsException;
 use App\Exception\UnauthenticatedException;
+use App\Exception\UnsupportedMediaTypeException;
 use App\Exception\UserNotFoundException;
 use App\Exception\ValidationException;
 use Psr\Log\LoggerInterface;
@@ -31,6 +34,20 @@ final readonly class ErrorHandler
         Throwable $exception,
         ?Request $request = null
     ): Response {
+        if ($exception instanceof PayloadTooLargeException) {
+            return Response::json(
+                ['error' => $exception->getMessage()],
+                413
+            );
+        }
+
+        if ($exception instanceof UnsupportedMediaTypeException) {
+            return Response::json(
+                ['error' => $exception->getMessage()],
+                415
+            );
+        }
+
         if ($exception instanceof InvalidJsonBodyException) {
             return Response::json(
                 [
@@ -58,6 +75,16 @@ final readonly class ErrorHandler
                     'error' => 'Usuario ou senha invalidos.',
                 ],
                 401
+            );
+        }
+
+        if ($exception instanceof TooManyLoginAttemptsException) {
+            return Response::json(
+                ['error' => $exception->getMessage()],
+                429
+            )->withHeader(
+                'Retry-After',
+                (string) $exception->retryAfter
             );
         }
 

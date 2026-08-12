@@ -19,7 +19,10 @@ final readonly class CsrfRequestValidator
     ) {
     }
 
-    public function validate(Request $request): void
+    public function validate(
+        Request $request,
+        ?string $tokenCsrfHash = null
+    ): void
     {
         if (!$this->config->csrfEnabled) {
             return;
@@ -46,6 +49,15 @@ final readonly class CsrfRequestValidator
         }
 
         if (!$this->csrfTokens->verify($header, $expectedHash)) {
+            throw new InvalidCsrfTokenException(
+                'Token CSRF invalido.'
+            );
+        }
+
+        if (
+            $tokenCsrfHash !== null
+            && !hash_equals($tokenCsrfHash, $expectedHash)
+        ) {
             throw new InvalidCsrfTokenException(
                 'Token CSRF invalido.'
             );

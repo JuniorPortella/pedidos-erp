@@ -14,6 +14,7 @@ RUN apt-get update \
         xmlwriter \
     && a2enmod rewrite headers \
     && printf 'ServerName localhost\n' > /etc/apache2/conf-available/servername.conf \
+    && printf 'expose_php=Off\n' > /usr/local/etc/php/conf.d/security.ini \
     && a2enconf servername \
     && rm -rf /var/lib/apt/lists/*
 

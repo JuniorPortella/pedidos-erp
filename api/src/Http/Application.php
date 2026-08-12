@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Middleware\CorsMiddleware;
+use App\Middleware\SecurityHeadersMiddleware;
 use App\Routing\Router;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -15,7 +16,8 @@ final readonly class Application
         private Router $router,
         private ErrorHandler $errorHandler,
         private LoggerInterface $logger,
-        private ?CorsMiddleware $cors = null
+        private ?CorsMiddleware $cors = null,
+        private ?SecurityHeadersMiddleware $securityHeaders = null
     ) {
     }
 
@@ -46,6 +48,10 @@ final readonly class Application
                         $response
                     );
             }
+        }
+
+        if ($this->securityHeaders !== null) {
+            $response = $this->securityHeaders->add($response);
         }
 
         $durationInMilliseconds = round(

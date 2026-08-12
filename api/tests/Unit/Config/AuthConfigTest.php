@@ -23,6 +23,10 @@ final class AuthConfigTest extends TestCase
         'AUTH_COOKIE_SECURE',
         'AUTH_COOKIE_SAME_SITE',
         'AUTH_CSRF_ENABLED',
+        'AUTH_LOGIN_MAX_ATTEMPTS',
+        'AUTH_LOGIN_IP_MAX_ATTEMPTS',
+        'AUTH_LOGIN_WINDOW',
+        'AUTH_LOGIN_BLOCK',
     ];
 
     /**
@@ -54,6 +58,10 @@ final class AuthConfigTest extends TestCase
             'AUTH_COOKIE_SECURE' => 'false',
             'AUTH_COOKIE_SAME_SITE' => 'Lax',
             'AUTH_CSRF_ENABLED' => 'true',
+            'AUTH_LOGIN_MAX_ATTEMPTS' => '6',
+            'AUTH_LOGIN_IP_MAX_ATTEMPTS' => '24',
+            'AUTH_LOGIN_WINDOW' => '600',
+            'AUTH_LOGIN_BLOCK' => '1200',
         ]);
     }
 
@@ -92,6 +100,10 @@ final class AuthConfigTest extends TestCase
         self::assertFalse($config->cookieSecure);
         self::assertSame('Lax', $config->cookieSameSite);
         self::assertTrue($config->csrfEnabled);
+        self::assertSame(6, $config->loginMaxAttempts);
+        self::assertSame(24, $config->loginIpMaxAttempts);
+        self::assertSame(600, $config->loginWindowSeconds);
+        self::assertSame(1200, $config->loginBlockSeconds);
     }
 
     public function testLoadsSecureProductionConfiguration(): void

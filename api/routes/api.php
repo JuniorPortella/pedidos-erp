@@ -111,7 +111,10 @@ return static function (
                 $adminAuthorization,
                 $users
             ): Response {
-                $csrf->validate($request);
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
 
                 $adminAuthorization->authorize(
                     $authenticatedUser
@@ -138,7 +141,10 @@ return static function (
                 $adminAuthorization,
                 $users
             ): Response {
-                $csrf->validate($request);
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
 
                 $adminAuthorization->authorize(
                     $authenticatedUser
@@ -169,7 +175,10 @@ return static function (
                 $adminAuthorization,
                 $users
             ): Response {
-                $csrf->validate($request);
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
 
                 $adminAuthorization->authorize(
                     $authenticatedUser
@@ -225,7 +234,10 @@ return static function (
                 $csrf,
                 $orders
             ): Response {
-                $csrf->validate($request);
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
 
                 return $orders->create(
                     $request,
@@ -250,7 +262,10 @@ return static function (
                 $csrf,
                 $orders
             ): Response {
-                $csrf->validate($request);
+                $csrf->validate(
+                    $request,
+                    $authenticatedUser->token->csrfHash
+                );
 
                 return $orders->update(
                     $request,

@@ -9,12 +9,15 @@ use App\Exception\InvalidCsrfTokenException;
 use App\Exception\InvalidJsonBodyException;
 use App\Exception\InvalidTokenException;
 use App\Exception\OrderNotFoundException;
+use App\Exception\PayloadTooLargeException;
 use App\Exception\ForbiddenException;
 use App\Exception\MethodNotAllowedException;
 use App\Exception\RefreshTokenNotActiveException;
 use App\Exception\RefreshTokenReuseException;
 use App\Exception\RouteNotFoundException;
+use App\Exception\TooManyLoginAttemptsException;
 use App\Exception\UnauthenticatedException;
+use App\Exception\UnsupportedMediaTypeException;
 use App\Exception\UserNotFoundException;
 use App\Exception\ValidationException;
 use App\Http\ErrorHandler;
@@ -80,6 +83,20 @@ final class ErrorHandlerTest extends TestCase
                 400,
                 'O corpo da requisicao deve conter um JSON valido.',
             ],
+            'payload too large' => [
+                new PayloadTooLargeException(
+                    'O corpo da requisicao excede o limite de 1 MB.'
+                ),
+                413,
+                'O corpo da requisicao excede o limite de 1 MB.',
+            ],
+            'unsupported media type' => [
+                new UnsupportedMediaTypeException(
+                    'O Content-Type deve ser application/json.'
+                ),
+                415,
+                'O Content-Type deve ser application/json.',
+            ],
             'invalid credentials' => [
                 new InvalidCredentialsException(
                     'Detalhe interno.'
@@ -137,6 +154,26 @@ final class ErrorHandlerTest extends TestCase
                 'Usuario nao encontrado.',
             ],
         ];
+    }
+
+    public function testMapsLoginRateLimitWithRetryAfter(): void
+    {
+        $response = $this->errorHandler->handle(
+            new TooManyLoginAttemptsException(120)
+        );
+
+        self::assertSame(429, $response->status());
+        self::assertSame(
+            ['120'],
+            $response->headerValues('Retry-After')
+        );
+        self::assertSame(
+            [
+                'error' =>
+                    'Muitas tentativas de login. Tente novamente mais tarde.',
+            ],
+            $this->decode($response)
+        );
     }
 
     public function testMapsValidationErrors(): void

@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Http;
 
 use App\Exception\InvalidJsonBodyException;
+use App\Exception\PayloadTooLargeException;
+use App\Exception\UnsupportedMediaTypeException;
 use JsonException;
 use stdClass;
 
 final readonly class Request
 {
+    public const MAX_JSON_BODY_BYTES = 1_048_576;
+
     public string $method;
     public string $path;
 
@@ -24,7 +28,8 @@ final readonly class Request
         public array $query = [],
         public array $headers = [],
         public array $cookies = [],
-        private string $body = ''
+        private string $body = '',
+        public string $clientIp = 'unknown'
     ) {
         $method = strtoupper(trim($method));
 
@@ -90,7 +95,8 @@ final readonly class Request
             query: $query,
             headers: self::extractHeaders($server),
             cookies: $cookies,
-            body: $body
+            body: $body,
+            clientIp: self::extractClientIp($server)
         );
     }
 
@@ -111,6 +117,34 @@ final readonly class Request
     {
         if (trim($this->body) === '') {
             return [];
+        }
+
+        if (strlen($this->body) > self::MAX_JSON_BODY_BYTES) {
+            throw new PayloadTooLargeException(
+                'O corpo da requisicao excede o limite de 1 MB.'
+            );
+        }
+
+        $contentType = strtolower(
+            trim(
+                explode(
+                    ';',
+                    $this->header('Content-Type') ?? '',
+                    2
+                )[0]
+            )
+        );
+
+        if (
+            $contentType !== 'application/json'
+            && !(
+                str_starts_with($contentType, 'application/')
+                && str_ends_with($contentType, '+json')
+            )
+        ) {
+            throw new UnsupportedMediaTypeException(
+                'O Content-Type deve ser application/json.'
+            );
         }
 
         try {
@@ -176,5 +210,22 @@ final readonly class Request
         }
 
         return $headers;
+    }
+
+    /**
+     * @param array<string, mixed> $server
+     */
+    private static function extractClientIp(array $server): string
+    {
+        $clientIp = $server['REMOTE_ADDR'] ?? null;
+
+        if (
+            !is_string($clientIp)
+            || filter_var($clientIp, FILTER_VALIDATE_IP) === false
+        ) {
+            return 'unknown';
+        }
+
+        return $clientIp;
     }
 }

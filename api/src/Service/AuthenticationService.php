@@ -14,6 +14,7 @@ use App\Repository\RefreshTokenRepository;
 use App\Repository\TokenBlacklistRepository;
 use App\Repository\UserRepository;
 use App\Security\CsrfTokenService;
+use App\Security\LoginRateLimiter;
 
 final class AuthenticationService
 {
@@ -23,13 +24,15 @@ final class AuthenticationService
         private readonly CsrfTokenService $csrfService,
         private readonly RefreshTokenRepository $refreshTokens,
         private readonly UserRepository $users,
-        private readonly TokenBlacklistRepository $blacklist
+        private readonly TokenBlacklistRepository $blacklist,
+        private readonly ?LoginRateLimiter $loginRateLimiter = null
     ) {
     }
 
     public function login(
         string $username,
-        string $password
+        string $password,
+        string $clientIp = 'unknown'
     ): AuthenticationResult {
         $username = trim($username);
 
@@ -39,16 +42,31 @@ final class AuthenticationService
             );
         }
 
+        $this->loginRateLimiter?->assertAllowed(
+            $username,
+            $clientIp
+        );
+
         $user = $this->authentication->authenticate(
             $username,
             $password
         );
 
         if ($user === null) {
+            $this->loginRateLimiter?->registerFailure(
+                $username,
+                $clientIp
+            );
+
             throw new InvalidCredentialsException(
                 'Usuario ou senha invalidos.'
             );
         }
+
+        $this->loginRateLimiter?->registerSuccess(
+            $username,
+            $clientIp
+        );
 
         $csrfToken = $this->csrfService->generate();
         $csrfHash = $this->csrfService->hash($csrfToken);

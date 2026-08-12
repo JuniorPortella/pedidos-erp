@@ -53,6 +53,35 @@ final class CsrfRequestValidatorTest extends TestCase
         self::assertTrue(true);
     }
 
+    public function testAcceptsTokenBoundToAuthenticatedSession(): void
+    {
+        $service = new CsrfTokenService();
+        $token = $service->generate();
+
+        $this->createValidator()->validate(
+            $this->request($token, $token),
+            $service->hash($token)
+        );
+
+        self::assertTrue(true);
+    }
+
+    public function testRejectsTokenFromDifferentSession(): void
+    {
+        $service = new CsrfTokenService();
+        $token = $service->generate();
+        $differentToken = $service->generate();
+
+        $this->expectException(
+            InvalidCsrfTokenException::class
+        );
+
+        $this->createValidator()->validate(
+            $this->request($token, $token),
+            $service->hash($differentToken)
+        );
+    }
+
     #[DataProvider('invalidTokens')]
     public function testRejectsInvalidTokens(
         ?string $cookie,

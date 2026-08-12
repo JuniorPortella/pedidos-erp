@@ -31,7 +31,8 @@ final readonly class AuthenticationController
 
         $result = $this->authentication->login(
             $username,
-            $password
+            $password,
+            $request->clientIp
         );
 
         return $this->authenticatedResponse($result);

@@ -18,6 +18,7 @@ use App\Repository\RefreshTokenRepository;
 use App\Repository\TokenBlacklistRepository;
 use App\Repository\UserRepository;
 use App\Security\CsrfTokenService;
+use App\Security\LoginRateLimiter;
 use App\Service\AuthenticationService;
 use App\Service\JwtService;
 use DateTimeImmutable;
@@ -77,18 +78,35 @@ final class AuthenticationServiceTest extends TestCase
                 )
             );
 
+        $rateLimiter = $this->createMock(
+            LoginRateLimiter::class
+        );
+        $rateLimiter
+            ->expects(self::once())
+            ->method('assertAllowed')
+            ->with('operador', '203.0.113.10');
+        $rateLimiter
+            ->expects(self::once())
+            ->method('registerSuccess')
+            ->with('operador', '203.0.113.10');
+        $rateLimiter
+            ->expects(self::never())
+            ->method('registerFailure');
+
         $service = new AuthenticationService(
             $authentication,
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
             $this->createMock(UserRepository::class),
-            $this->createMock(TokenBlacklistRepository::class)
+            $this->createMock(TokenBlacklistRepository::class),
+            $rateLimiter
         );
 
         $result = $service->login(
             ' operador ',
-            'SenhaSegura123'
+            'SenhaSegura123',
+            '203.0.113.10'
         );
 
         self::assertSame($user, $result->user);
@@ -137,13 +155,29 @@ final class AuthenticationServiceTest extends TestCase
             ->expects(self::never())
             ->method('register');
 
+        $rateLimiter = $this->createMock(
+            LoginRateLimiter::class
+        );
+        $rateLimiter
+            ->expects(self::once())
+            ->method('assertAllowed')
+            ->with('operador', '203.0.113.20');
+        $rateLimiter
+            ->expects(self::once())
+            ->method('registerFailure')
+            ->with('operador', '203.0.113.20');
+        $rateLimiter
+            ->expects(self::never())
+            ->method('registerSuccess');
+
         $service = new AuthenticationService(
             $authentication,
             $this->jwtService,
             $this->csrfService,
             $refreshTokens,
             $this->createMock(UserRepository::class),
-            $this->createMock(TokenBlacklistRepository::class)
+            $this->createMock(TokenBlacklistRepository::class),
+            $rateLimiter
         );
 
         $this->expectException(
@@ -153,7 +187,11 @@ final class AuthenticationServiceTest extends TestCase
             'Usuario ou senha invalidos.'
         );
 
-        $service->login('operador', 'SenhaIncorreta');
+        $service->login(
+            'operador',
+            'SenhaIncorreta',
+            '203.0.113.20'
+        );
     }
 
     #[DataProvider('emptyCredentials')]

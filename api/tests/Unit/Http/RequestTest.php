@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Unit\Http;
 
 use App\Exception\InvalidJsonBodyException;
+use App\Exception\PayloadTooLargeException;
+use App\Exception\UnsupportedMediaTypeException;
 use App\Http\Request;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -108,7 +110,7 @@ final class RequestTest extends TestCase
         string $body
     ): void {
         $request = Request::fromServer(
-            server: [],
+            server: ['CONTENT_TYPE' => 'application/json'],
             body: $body
         );
 
@@ -127,5 +129,53 @@ final class RequestTest extends TestCase
             'JSON string' => ['"texto"'],
             'JSON null' => ['null'],
         ];
+    }
+
+    public function testRejectsJsonWithoutJsonContentType(): void
+    {
+        $request = Request::fromServer(
+            server: ['CONTENT_TYPE' => 'text/plain'],
+            body: '{"nome":"Teste"}'
+        );
+
+        $this->expectException(
+            UnsupportedMediaTypeException::class
+        );
+
+        $request->json();
+    }
+
+    public function testRejectsJsonBodyAboveOneMegabyte(): void
+    {
+        $request = Request::fromServer(
+            server: ['CONTENT_TYPE' => 'application/json'],
+            body: str_repeat(
+                'a',
+                Request::MAX_JSON_BODY_BYTES + 1
+            )
+        );
+
+        $this->expectException(
+            PayloadTooLargeException::class
+        );
+
+        $request->json();
+    }
+
+    public function testUsesOnlyValidatedRemoteAddress(): void
+    {
+        $request = Request::fromServer([
+            'REMOTE_ADDR' => '203.0.113.10',
+            'HTTP_X_FORWARDED_FOR' => '198.51.100.20',
+        ]);
+
+        self::assertSame('203.0.113.10', $request->clientIp);
+
+        self::assertSame(
+            'unknown',
+            Request::fromServer([
+                'REMOTE_ADDR' => 'endereco-invalido',
+            ])->clientIp
+        );
     }
 }

@@ -121,6 +121,7 @@ final class OrderControllerTest extends TestCase
         return new Request(
             $method,
             '/pedidos',
+            headers: ['content-type' => 'application/json'],
             body: json_encode($body, JSON_THROW_ON_ERROR)
         );
     }
