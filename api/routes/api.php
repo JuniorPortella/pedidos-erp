@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Controller\AuthenticationController;
 use App\Controller\UserController;
 use App\Dto\AuthenticatedUser;
+use App\Http\CsrfRequestValidator;
 use App\Http\Request;
 use App\Http\Response;
 use App\Middleware\AccessTokenMiddleware;
@@ -16,7 +17,8 @@ return static function (
     AuthenticationController $authentication,
     UserController $users,
     AccessTokenMiddleware $accessToken,
-    AdminAuthorization $adminAuthorization
+    AdminAuthorization $adminAuthorization,
+    CsrfRequestValidator $csrf
 ): void {
     $healthHandler = static function (
         Request $request,
@@ -88,6 +90,32 @@ return static function (
                 );
 
                 return $users->index();
+            }
+        )
+    );
+
+    $router->post(
+        '/usuarios',
+        static fn (
+            Request $request,
+            array $parameters
+        ): Response => $accessToken->handle(
+            $request,
+            static function (
+                AuthenticatedUser $authenticatedUser
+            ) use (
+                $request,
+                $csrf,
+                $adminAuthorization,
+                $users
+            ): Response {
+                $csrf->validate($request);
+
+                $adminAuthorization->authorize(
+                    $authenticatedUser
+                );
+
+                return $users->create($request);
             }
         )
     );

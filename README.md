@@ -38,13 +38,14 @@ Até agora, deixei a infraestrutura inicial da API pronta:
 - autorização por perfil `ADMIN` e `OPERADOR`;
 - rota autenticada para consultar a sessão atual;
 - listagem de usuários restrita ao perfil `ADMIN`;
+- criação de usuários restrita ao perfil `ADMIN` e protegida por CSRF;
 - comando de terminal para criar administradores sem cadastro público;
 - healthchecks configurados para a API e o banco;
 - rota `GET /health` disponível para verificar a API;
 - testes unitários e de integração configurados com PHPUnit.
 
-Ainda vou implementar criação, atualização e exclusão de usuários pela API,
-pedidos e frontend.
+Ainda vou implementar atualização e exclusão de usuários pela API, pedidos e
+frontend.
 
 ## Estrutura
 
@@ -244,6 +245,7 @@ http://localhost:18080
 | `POST` | `/auth/logout` | Revoga a sessão com proteção CSRF |
 | `GET` | `/auth/me` | Retorna o usuário autenticado |
 | `GET` | `/usuarios` | Lista usuários; exige perfil `ADMIN` |
+| `POST` | `/usuarios` | Cria usuário; exige `ADMIN` e proteção CSRF |
 
 Teste rápido:
 
@@ -281,9 +283,11 @@ migrations pendentes, verifica as tabelas obrigatórias e executa um logout real
 em uma transação temporária para validar a revogação e a blacklist. O smoke
 também cria usuários temporários para confirmar autenticação obrigatória,
 bloqueio de token inválido ou revogado, acesso comum do `OPERADOR`, bloqueio do
-`OPERADOR` em rota administrativa e acesso permitido ao `ADMIN`. Esses usuários
-e seus tokens são removidos ao final da execução. Para executar PHPUnit e o
-smoke test em sequência:
+`OPERADOR` em rota administrativa e acesso permitido ao `ADMIN`. Ele também
+valida a criação administrativa de usuário, política de senha, proteção CSRF e
+duplicidade de e-mail e usuário. Os registros temporários e seus tokens são
+removidos ao final da execução. Para executar PHPUnit e o smoke test em
+sequência:
 
 ```bash
 docker compose exec api composer check
@@ -304,7 +308,7 @@ tokens, além de inserção, consulta e limpeza da blacklist.
 Resultado atual:
 
 ```text
-OK (192 tests, 620 assertions)
+OK (194 tests, 629 assertions)
 ```
 
 Para encerrar os containers sem apagar os dados do banco:
@@ -374,8 +378,8 @@ A base de domínio, persistência e autenticação está em construção e ainda
 representa a aplicação completa. Neste momento:
 
 - estão expostas as rotas técnicas, de autenticação e a listagem administrativa
-  de usuários;
-- criação, atualização e exclusão de usuários ainda não estão expostas;
+  e criação de usuários;
+- atualização e exclusão de usuários ainda não estão expostas;
 - o CORS ainda não está restrito à origem do frontend;
 - a regra de pedidos, o frontend React e a refatoração legada ainda serão
   desenvolvidos.
@@ -385,7 +389,6 @@ representa a aplicação completa. Neste momento:
 Meus próximos passos são:
 
 - implementar atualização e exclusão lógica de usuários;
-- implementar controllers e endpoints de cadastro de usuários;
 - implementar criação, listagem, consulta e atualização de pedidos;
 - ampliar os testes unitários e criar testes de integração dos endpoints;
 - desenvolver o frontend em React com Material UI;

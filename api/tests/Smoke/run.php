@@ -480,6 +480,28 @@ function verifyHttpAuthorization(
             'Bloqueio de perfil retornou mensagem inesperada.'
         );
 
+        [$operatorCreateStatus] = requestJson(
+            $baseUrl . '/usuarios',
+            'POST',
+            [
+                cookieHeader($operatorCookies),
+                'X-CSRF-Token: '
+                    . $operatorCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Usuario indevido',
+                'email' => 'indevido@example.test',
+                'usuario' => 'usuario_indevido',
+                'senha' => 'SenhaSegura@123',
+                'perfil' => 'ADMIN',
+            ]
+        );
+
+        assertSmoke(
+            $operatorCreateStatus === 403,
+            'OPERADOR nao deve criar usuarios.'
+        );
+
         [
             $adminLoginStatus,
             $adminLoginBody,
@@ -507,6 +529,125 @@ function verifyHttpAuthorization(
         $adminCookies = extractCookies($adminLoginHeaders);
 
         assertAuthenticationCookies($adminCookies);
+
+        [$missingCsrfStatus] = requestJson(
+            $baseUrl . '/usuarios',
+            'POST',
+            [cookieHeader($adminCookies)],
+            [
+                'nome' => 'Sem CSRF',
+                'email' => 'sem-csrf@example.test',
+                'usuario' => 'sem_csrf',
+                'senha' => 'SenhaSegura@123',
+                'perfil' => 'OPERADOR',
+            ]
+        );
+
+        assertSmoke(
+            $missingCsrfStatus === 403,
+            'POST /usuarios sem CSRF deve responder HTTP 403.'
+        );
+
+        [$weakPasswordStatus, $weakPasswordBody] = requestJson(
+            $baseUrl . '/usuarios',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Senha Fraca',
+                'email' => 'senha-fraca@example.test',
+                'usuario' => 'senha_fraca',
+                'senha' => 'senhafraca',
+                'perfil' => 'OPERADOR',
+            ]
+        );
+
+        assertSmoke(
+            $weakPasswordStatus === 422,
+            'Senha fraca em POST /usuarios deve responder HTTP 422.'
+        );
+        assertSmoke(
+            isset($weakPasswordBody['fields']['senha']),
+            'Senha fraca deve retornar erro no campo senha.'
+        );
+
+        $createdUsername = 'created_operator_' . $suffix;
+
+        [$createStatus, $createBody] = requestJson(
+            $baseUrl . '/usuarios',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Operador Criado',
+                'email' => sprintf(
+                    'created-%s@example.test',
+                    $suffix
+                ),
+                'usuario' => $createdUsername,
+                'senha' => 'SenhaSegura@123',
+                'perfil' => 'OPERADOR',
+            ]
+        );
+
+        assertSmoke(
+            $createStatus === 201,
+            'ADMIN deve criar usuario com HTTP 201.'
+        );
+        assertSmoke(
+            ($createBody['user']['usuario'] ?? null)
+                === $createdUsername
+            && ($createBody['user']['perfil'] ?? null)
+                === 'OPERADOR',
+            'POST /usuarios retornou usuario inesperado.'
+        );
+        assertSmoke(
+            !isset($createBody['user']['senha'])
+                && !isset($createBody['user']['senha_hash']),
+            'POST /usuarios nao deve retornar a senha.'
+        );
+
+        $createdUserId = $createBody['user']['id'] ?? null;
+
+        assertSmoke(
+            is_int($createdUserId) && $createdUserId > 0,
+            'POST /usuarios nao retornou um id valido.'
+        );
+
+        $userIds[] = $createdUserId;
+
+        [$duplicateStatus, $duplicateBody] = requestJson(
+            $baseUrl . '/usuarios',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Operador Duplicado',
+                'email' => sprintf(
+                    'created-%s@example.test',
+                    $suffix
+                ),
+                'usuario' => $createdUsername,
+                'senha' => 'SenhaSegura@123',
+                'perfil' => 'OPERADOR',
+            ]
+        );
+
+        assertSmoke(
+            $duplicateStatus === 422,
+            'Usuario duplicado deve responder HTTP 422.'
+        );
+        assertSmoke(
+            isset($duplicateBody['fields']['email'])
+                && isset($duplicateBody['fields']['usuario']),
+            'Duplicidade deve identificar email e usuario.'
+        );
 
         [$adminUsersStatus, $adminUsersBody] = requestJson(
             $baseUrl . '/usuarios',

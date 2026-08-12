@@ -23,6 +23,7 @@ use App\Security\CsrfTokenService;
 use App\Security\DataCipher;
 use App\Security\LookupHasher;
 use App\Service\AuthenticationService;
+use App\Service\CreateUserInputValidator;
 use App\Service\JwtService;
 use App\Service\UserService;
 
@@ -55,6 +56,10 @@ $blacklist = new PdoTokenBlacklistRepository(
 
 $csrfTokens = new CsrfTokenService();
 $jwtService = new JwtService($authConfig);
+$csrfRequestValidator = new CsrfRequestValidator(
+    $authConfig,
+    $csrfTokens
+);
 
 $authenticationService = new AuthenticationService(
     new PdoAuthenticationRepository(
@@ -71,10 +76,7 @@ $authenticationService = new AuthenticationService(
 $authenticationController = new AuthenticationController(
     $authenticationService,
     new AuthenticationCookieService($authConfig),
-    new CsrfRequestValidator(
-        $authConfig,
-        $csrfTokens
-    )
+    $csrfRequestValidator
 );
 
 $accessTokenMiddleware = new AccessTokenMiddleware(
@@ -86,7 +88,8 @@ $accessTokenMiddleware = new AccessTokenMiddleware(
 $adminAuthorization = new AdminAuthorization();
 
 $userController = new UserController(
-    new UserService($userRepository)
+    new UserService($userRepository),
+    new CreateUserInputValidator()
 );
 
 $registerRoutes = require dirname(__DIR__)
@@ -103,7 +106,8 @@ $registerRoutes(
     $authenticationController,
     $userController,
     $accessTokenMiddleware,
-    $adminAuthorization
+    $adminAuthorization,
+    $csrfRequestValidator
 );
 
 return new Application(
