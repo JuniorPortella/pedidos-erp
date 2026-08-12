@@ -26,15 +26,26 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from 'react';
 import { PageHeader } from '../components/PageHeader';
+import { SearchField } from '../components/SearchField';
 import { ApiError, apiRequest, jsonBody } from '../lib/api';
+import { matchesSearch } from '../lib/search';
 import type { User, UserProfile, ValidationFields } from '../types/api';
+
+const ROWS_PER_PAGE = 10;
 
 interface UserForm {
   nome: string;
@@ -65,6 +76,32 @@ export function AccessPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((user) =>
+        matchesSearch(search, [
+          user.nome,
+          user.email,
+          user.usuario,
+          user.perfil,
+          user.perfil === 'ADMIN' ? 'Administrador' : 'Operador',
+          user.ativo ? 'Ativo' : 'Inativo',
+        ]),
+      ),
+    [search, users],
+  );
+
+  const visibleUsers = useMemo(
+    () =>
+      filteredUsers.slice(
+        page * ROWS_PER_PAGE,
+        page * ROWS_PER_PAGE + ROWS_PER_PAGE,
+      ),
+    [filteredUsers, page],
+  );
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -83,6 +120,20 @@ export function AccessPage() {
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    const lastPage = Math.max(
+      0,
+      Math.ceil(filteredUsers.length / ROWS_PER_PAGE) - 1,
+    );
+
+    setPage((currentPage) => Math.min(currentPage, lastPage));
+  }, [filteredUsers.length]);
+
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setPage(0);
+  };
 
   const openNew = () => {
     setEditingId(null);
@@ -172,9 +223,29 @@ export function AccessPage() {
         title="Acessos"
         description="Cadastre administradores e operadores autorizados a usar o sistema."
         actions={
-          <Button variant="contained" startIcon={<Add />} onClick={openNew}>
-            Novo cadastro
-          </Button>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              alignItems: { xs: 'stretch', md: 'center' },
+              gap: 1.5,
+              width: { xs: '100%', md: 'auto' },
+            }}
+          >
+            <SearchField
+              label="Buscar acessos"
+              value={search}
+              onChange={updateSearch}
+            />
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={openNew}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Novo cadastro
+            </Button>
+          </Box>
         }
       />
 
@@ -227,12 +298,22 @@ export function AccessPage() {
         </Paper>
       )}
 
-      {!loading && users.length > 0 && (
-        <TableContainer component={Paper}>
-          <Table sx={{ minWidth: 800 }} aria-label="Lista de acessos">
-          <TableHead><TableRow><TableCell>Nome</TableCell><TableCell>E-mail</TableCell><TableCell>Usuario</TableCell><TableCell>Perfil</TableCell><TableCell>Status</TableCell><TableCell align="center">Acoes</TableCell></TableRow></TableHead>
-          <TableBody>
-            {users.map((user) => (
+      {!loading && users.length > 0 && filteredUsers.length === 0 && (
+        <Paper sx={{ py: 7, px: 2, textAlign: 'center' }}>
+          <Typography fontWeight={600}>Nenhum acesso encontrado.</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Tente buscar por outro nome, e-mail, usuario, perfil ou status.
+          </Typography>
+        </Paper>
+      )}
+
+      {!loading && filteredUsers.length > 0 && (
+        <Paper>
+          <TableContainer>
+            <Table sx={{ minWidth: 800 }} aria-label="Lista de acessos">
+              <TableHead><TableRow><TableCell>Nome</TableCell><TableCell>E-mail</TableCell><TableCell>Usuario</TableCell><TableCell>Perfil</TableCell><TableCell>Status</TableCell><TableCell align="center">Acoes</TableCell></TableRow></TableHead>
+              <TableBody>
+                {visibleUsers.map((user) => (
               <TableRow hover key={user.id}>
                 <TableCell sx={{ fontWeight: 600 }}>{user.nome}</TableCell>
                 <TableCell>{user.email}</TableCell>
@@ -244,10 +325,25 @@ export function AccessPage() {
                   <Tooltip title="Excluir"><IconButton color="error" aria-label={`Excluir ${user.nome}`} onClick={() => setDeleting(user)}><DeleteOutline fontSize="small" /></IconButton></Tooltip>
                 </TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        </TableContainer>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={filteredUsers.length}
+            page={page}
+            rowsPerPage={ROWS_PER_PAGE}
+            rowsPerPageOptions={[]}
+            onPageChange={(_event, nextPage) => setPage(nextPage)}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}-${to} de ${count}`
+            }
+            getItemAriaLabel={(type) =>
+              type === 'next' ? 'Proxima pagina' : 'Pagina anterior'
+            }
+          />
+        </Paper>
       )}
 
       <Dialog open={Boolean(deleting)} onClose={() => setDeleting(null)}>

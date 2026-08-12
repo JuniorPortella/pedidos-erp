@@ -17,9 +17,9 @@ export function PageHeader({
       component="header"
       sx={{
         display: 'flex',
-        alignItems: { xs: 'flex-start', sm: 'center' },
+        alignItems: { xs: 'flex-start', md: 'center' },
         justifyContent: 'space-between',
-        flexDirection: { xs: 'column', sm: 'row' },
+        flexDirection: { xs: 'column', md: 'row' },
         gap: 2,
         mb: 3,
       }}

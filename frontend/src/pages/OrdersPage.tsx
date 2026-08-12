@@ -12,15 +12,20 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
+import { SearchField } from '../components/SearchField';
 import { ApiError, apiRequest } from '../lib/api';
+import { matchesSearch } from '../lib/search';
 import type { Order, OrderStatus } from '../types/api';
+
+const ROWS_PER_PAGE = 10;
 
 const statusLabels: Record<OrderStatus, string> = {
   PENDENTE: 'Pendente',
@@ -38,7 +43,32 @@ export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
   const navigate = useNavigate();
+
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter((order) =>
+        matchesSearch(search, [
+          order.id,
+          order.cliente_nome,
+          order.descricao,
+          order.status,
+          statusLabels[order.status],
+        ]),
+      ),
+    [orders, search],
+  );
+
+  const visibleOrders = useMemo(
+    () =>
+      filteredOrders.slice(
+        page * ROWS_PER_PAGE,
+        page * ROWS_PER_PAGE + ROWS_PER_PAGE,
+      ),
+    [filteredOrders, page],
+  );
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -62,19 +92,49 @@ export function OrdersPage() {
     void loadOrders();
   }, [loadOrders]);
 
+  useEffect(() => {
+    const lastPage = Math.max(
+      0,
+      Math.ceil(filteredOrders.length / ROWS_PER_PAGE) - 1,
+    );
+
+    setPage((currentPage) => Math.min(currentPage, lastPage));
+  }, [filteredOrders.length]);
+
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setPage(0);
+  };
+
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
       <PageHeader
         title="Pedidos"
         description="Consulte os registros e abra um pedido para editar."
         actions={
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => navigate('/pedidos/novo')}
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              alignItems: { xs: 'stretch', md: 'center' },
+              gap: 1.5,
+              width: { xs: '100%', md: 'auto' },
+            }}
           >
-            Novo pedido
-          </Button>
+            <SearchField
+              label="Buscar pedidos"
+              value={search}
+              onChange={updateSearch}
+            />
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => navigate('/pedidos/novo')}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Novo pedido
+            </Button>
+          </Box>
         }
       />
 
@@ -110,21 +170,31 @@ export function OrdersPage() {
         </Paper>
       )}
 
-      {!loading && orders.length > 0 && (
-        <TableContainer component={Paper}>
-          <Table sx={{ minWidth: 760 }} aria-label="Lista de pedidos">
-          <TableHead>
-            <TableRow>
-              <TableCell width={90}>Codigo</TableCell>
-              <TableCell>Cliente</TableCell>
-              <TableCell>Descricao</TableCell>
-              <TableCell width={180}>Status</TableCell>
-              <TableCell width={180}>Criado em</TableCell>
-              <TableCell width={72} align="center">Acoes</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {orders.map((order) => (
+      {!loading && !error && orders.length > 0 && filteredOrders.length === 0 && (
+        <Paper sx={{ py: 7, px: 2, textAlign: 'center' }}>
+          <Typography fontWeight={600}>Nenhum pedido encontrado.</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Tente buscar por outro cliente, descricao ou status.
+          </Typography>
+        </Paper>
+      )}
+
+      {!loading && filteredOrders.length > 0 && (
+        <Paper>
+          <TableContainer>
+            <Table sx={{ minWidth: 760 }} aria-label="Lista de pedidos">
+              <TableHead>
+                <TableRow>
+                  <TableCell width={90}>Codigo</TableCell>
+                  <TableCell>Cliente</TableCell>
+                  <TableCell>Descricao</TableCell>
+                  <TableCell width={180}>Status</TableCell>
+                  <TableCell width={180}>Criado em</TableCell>
+                  <TableCell width={72} align="center">Acoes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {visibleOrders.map((order) => (
                 <TableRow hover key={order.id}>
                   <TableCell>{order.id}</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>{order.cliente_nome}</TableCell>
@@ -158,10 +228,25 @@ export function OrdersPage() {
                     </Tooltip>
                   </TableCell>
                 </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        </TableContainer>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={filteredOrders.length}
+            page={page}
+            rowsPerPage={ROWS_PER_PAGE}
+            rowsPerPageOptions={[]}
+            onPageChange={(_event, nextPage) => setPage(nextPage)}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}-${to} de ${count}`
+            }
+            getItemAriaLabel={(type) =>
+              type === 'next' ? 'Proxima pagina' : 'Pagina anterior'
+            }
+          />
+        </Paper>
       )}
     </Box>
   );
