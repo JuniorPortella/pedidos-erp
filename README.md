@@ -14,7 +14,8 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - conexão PDO centralizada e validada com o MySQL;
 - criptografia autenticada implementada e testada com Libsodium;
 - hash protegido para consultas de dados criptografados;
-- migrations versionadas para usuários, clientes, pedidos, tokens e limite de login;
+- migrations versionadas para usuários, clientes, pedidos, tokens e limite de
+  login;
 - entidade, perfis e validação do cadastro de usuários;
 - persistência de usuários com PDO e proteção dos dados sensíveis;
 - service de usuários com validação de duplicidade e hash de senha;
@@ -55,7 +56,8 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - criação, listagem, consulta e atualização de pedidos;
 - relacionamento entre pedidos e clientes por chave estrangeira `cliente_id`;
 - acesso aos pedidos permitido para usuários `ADMIN` e `OPERADOR` autenticados;
-- nome do cliente e descrição do pedido criptografados no banco;
+- descrição do pedido criptografada no banco;
+- valor total do pedido persistido com precisão decimal e validado pela API;
 - validação dos três status permitidos para pedidos;
 - comando de terminal para criar administradores sem cadastro público;
 - healthchecks configurados para a API e o banco;
@@ -67,6 +69,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - layout ERP responsivo inspirado na navegação lateral do AgraTeste;
 - tela inicial e páginas unificadas para acessos, clientes e pedidos;
 - busca local e paginação de dez registros nas listas de acessos, clientes e pedidos;
+- exportação administrativa da lista filtrada de pedidos em relatório PDF;
 - estados de carregamento, lista vazia, sucesso, validação e erro no frontend;
 - cliente HTTP, componentes e fluxos do frontend testados com Vitest;
 - build de produção validado pelo TypeScript e Vite;
@@ -212,6 +215,7 @@ Estas são as versões que validei no ambiente Docker atual:
 - Vite 8.2
 - Material UI 7.3
 - Vitest 4.1
+- pdfmake 0.2.23
 - Docker Compose
 
 Dependências instaladas na API:
@@ -221,7 +225,8 @@ Dependências instaladas na API:
 - Monolog 3.10
 
 No frontend, uso os componentes do Material UI, os ícones oficiais do pacote
-`@mui/icons-material` e carregamento sob demanda das páginas.
+`@mui/icons-material` e carregamento sob demanda das páginas. O relatório usa
+`pdfmake`, cujo motor e fontes são carregados somente ao solicitar o PDF.
 
 ## Como executar
 
@@ -483,7 +488,9 @@ nas telas de acessos, clientes e pedidos. Os testes de componentes cobrem login,
 visibilidade da senha, restauração e proteção da sessão, autorização por perfil,
 navegação do menu, confirmação de logout, cadastro e exclusão de acessos e
 clientes, estados das listagens, criação, validação, carregamento e atualização
-de pedidos.
+de pedidos. Também validam os cálculos monetários, o conteúdo do relatório, a
+restrição visual do PDF ao perfil administrativo e a exportação de todos os
+resultados da busca, independentemente da página atual.
 
 Atualmente, a suíte possui testes unitários para o contrato OpenAPI, variáveis
 de ambiente, criptografia autenticada, hashes de consulta, entidades, validação
@@ -502,13 +509,13 @@ dados protegidos não são armazenados em texto puro.
 Resultado atual:
 
 ```text
-OK (300 tests, 1153 assertions)
+OK (310 tests, 1175 assertions)
 ```
 
 O frontend possui atualmente:
 
 ```text
-45 tests passed
+55 tests passed
 ```
 
 A refatoração do código legado possui:
@@ -569,6 +576,20 @@ listagem. Todas as operações de escrita usam prepared statements. O campo
 `criado_por` registra o usuário autenticado que criou o pedido, enquanto
 `ADMIN` e `OPERADOR` podem acessar as quatro rotas de pedidos.
 
+O valor total usa `DECIMAL(12,2)` no MySQL e permanece como texto decimal entre
+a API e o frontend, evitando os erros de arredondamento de números de ponto
+flutuante. A API aceita até dez dígitos inteiros e duas casas decimais, exige um
+valor maior que zero e normaliza o resultado antes de persistir. No frontend,
+os cálculos do relatório convertem esses valores para centavos inteiros.
+
+O relatório de vendas é gerado pelo botão `Baixar PDF` da própria tela de
+pedidos e fica disponível somente para `ADMIN`. Ele usa todos os pedidos
+encontrados pela busca, inclusive aqueles que não aparecem na página atual,
+consolida quantidade, valor total e vendas concluídas, relaciona os clientes já
+autorizados e gera o arquivo no navegador com `pdfmake`. Não há um endpoint
+adicional de relatório: são usados os mesmos dados de `GET /pedidos` e `GET
+/clientes`, e o PDF não é enviado nem armazenado no servidor.
+
 No cadastro de clientes, nome e telefone também usam criptografia autenticada
 com contextos separados. A API descriptografa esses campos somente ao montar a
 resposta autorizada. Como a criptografia gera um nonce aleatório, não criei
@@ -614,20 +635,34 @@ frames, envio de referência e uma política restritiva de conteúdo. O Apache e
 o PHP não expõem suas versões. HSTS é enviado apenas quando `APP_ENV` é
 `production`, porque ativá-lo em HTTP local prejudicaria o desenvolvimento.
 
-## Preparação para produção
+## Configuração de produção
 
-O Compose atual executa Vite e inclui ferramentas de desenvolvimento para
-facilitar a implementação. Antes da publicação, vou criar uma configuração de
-produção separada com estes pontos:
+O `compose.yaml` continua voltado ao desenvolvimento, com o servidor do Vite e
+as ferramentas de teste. Para a publicação, o projeto possui o arquivo
+`compose.production.yaml`, que aplica estes pontos:
 
-- TLS/HTTPS encerrado por um proxy reverso;
+- TLS/HTTPS encerrado pelo Nginx do frontend na porta configurável `8443`;
 - `APP_ENV=production`, `APP_DEBUG=false` e `AUTH_COOKIE_SECURE=true`;
-- `FRONTEND_ORIGIN` e `VITE_API_URL` com os domínios HTTPS reais;
-- segredos gerenciados pela plataforma, sem arquivo `.env` na imagem;
+- `FRONTEND_ORIGIN` com a origem HTTPS real e API acessada pelo caminho `/api`;
+- segredos fornecidos pelo `.env` externo, sem copiá-lo para as imagens;
 - frontend compilado por `npm run build` e servido como arquivos estáticos;
 - API instalada com `composer install --no-dev --classmap-authoritative`;
-- banco e backups fora da rede pública, com migrations executadas na entrega;
-- observabilidade, retenção de logs e alertas sem dados pessoais ou segredos.
+- MySQL e API restritos à rede interna do Docker;
+- limites de memória, healthchecks e rotação dos logs dos containers;
+- certificado montado somente para leitura a partir do diretório exclusivo
+  `/etc/letsencrypt-pedidos-erp` do servidor.
+
+O certificado não é incluído no repositório. Depois de disponibilizá-lo no
+servidor, a stack pode ser construída e iniciada com:
+
+```bash
+docker compose \
+    -f compose.production.yaml \
+    up -d --build --wait --wait-timeout 180
+```
+
+Na primeira publicação, também é necessário executar `php bin/migrate.php` e
+`php bin/create-admin.php` no container da API.
 
 Na administração de usuários, uma troca de senha, desativação ou exclusão
 lógica revoga os refresh tokens do usuário afetado. O access token continua
@@ -667,12 +702,13 @@ A aplicação atende aos fluxos principais do teste, mas ainda possui limitaçõ
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
   completo de usuários, o cadastro de clientes e as quatro rotas obrigatórias
   de pedidos;
+- o relatório atual consolida a busca local da lista de pedidos e gera o PDF no
+  navegador, sem filtros por período ou agregações no servidor;
 - a busca e a paginação atuais são locais e ainda não foram movidas para o
   servidor, o que seria necessário para volumes elevados de registros.
 
 ## Próximas etapas
 
 As três partes obrigatórias do teste estão implementadas. Como melhorias
-futuras, vou adicionar produtos e itens do pedido, preparar uma configuração
-separada para produção e mover a busca e a paginação para o servidor quando o
-volume de registros justificar essa mudança.
+futuras, vou adicionar produtos e itens do pedido e mover a busca e a paginação
+para o servidor quando o volume de registros justificar essa mudança.
