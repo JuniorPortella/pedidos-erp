@@ -17,7 +17,8 @@ final class UserService
 {
     public function __construct(
         private readonly UserRepository $repository,
-        private readonly ?RefreshTokenRepository $refreshTokens = null
+        private readonly ?RefreshTokenRepository $refreshTokens = null,
+        private readonly ?int $protectedUserId = null
     ) {
     }
 
@@ -62,11 +63,21 @@ final class UserService
      */
     public function findAll(): array
     {
-        return $this->repository->findAll();
+        return array_values(
+            array_filter(
+                $this->repository->findAll(),
+                fn (User $user): bool =>
+                    !$this->isProtected($user->id)
+            )
+        );
     }
 
     public function findById(int $id): ?User
     {
+        if ($this->isProtected($id)) {
+            return null;
+        }
+
         return $this->repository->findById($id);
     }
 
@@ -75,6 +86,8 @@ final class UserService
         UpdateUserInput $input,
         int $actorId
     ): User {
+        $this->ensureNotProtected($id);
+
         $currentUser = $this->repository->findById($id);
 
         if ($currentUser === null) {
@@ -154,6 +167,8 @@ final class UserService
 
     public function delete(int $id, int $actorId): void
     {
+        $this->ensureNotProtected($id);
+
         if ($id === $actorId) {
             throw new ValidationException([
                 'id' =>
@@ -174,5 +189,20 @@ final class UserService
         }
 
         $this->refreshTokens?->revokeAllForUser($id);
+    }
+
+    private function ensureNotProtected(int $id): void
+    {
+        if ($this->isProtected($id)) {
+            throw new UserNotFoundException(
+                'Usuario nao encontrado.'
+            );
+        }
+    }
+
+    private function isProtected(int $id): bool
+    {
+        return $this->protectedUserId !== null
+            && $id === $this->protectedUserId;
     }
 }

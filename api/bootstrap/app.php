@@ -112,7 +112,8 @@ $adminAuthorization = new AdminAuthorization();
 $userController = new UserController(
     new UserService(
         $userRepository,
-        $refreshTokens
+        $refreshTokens,
+        protectedUserId: 1
     ),
     new CreateUserInputValidator(),
     new UpdateUserInputValidator(

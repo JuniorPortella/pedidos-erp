@@ -121,6 +121,55 @@ final class UserServiceTest extends TestCase
         );
     }
 
+    public function testHidesAndProtectsConfiguredUser(): void
+    {
+        $protectedUser = $this->repository->create(
+            'Administrador Principal',
+            'principal@example.com',
+            'principal',
+            password_hash('SenhaSegura@123', PASSWORD_DEFAULT),
+            UserProfile::Admin
+        );
+
+        $visibleUser = $this->repository->create(
+            'Administrador Visivel',
+            'visivel@example.com',
+            'visivel',
+            password_hash('SenhaSegura@123', PASSWORD_DEFAULT),
+            UserProfile::Admin
+        );
+
+        $service = new UserService(
+            $this->repository,
+            $this->refreshTokens,
+            protectedUserId: $protectedUser->id
+        );
+
+        self::assertSame([$visibleUser], $service->findAll());
+        self::assertNull($service->findById($protectedUser->id));
+
+        try {
+            $service->update(
+                $protectedUser->id,
+                self::validUpdateInput(),
+                actorId: $visibleUser->id
+            );
+
+            self::fail(
+                'Era esperada uma UserNotFoundException.'
+            );
+        } catch (UserNotFoundException) {
+            self::addToAssertionCount(1);
+        }
+
+        $this->expectException(UserNotFoundException::class);
+
+        $service->delete(
+            $protectedUser->id,
+            actorId: $visibleUser->id
+        );
+    }
+
     public function testUpdatesUserWithoutChangingPassword(): void
     {
         $user = $this->service->create(self::validInput());
