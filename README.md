@@ -1,12 +1,13 @@
 # Pedidos ERP
 
-Este projeto evolui a entrega do teste técnico fullstack para um ERP de
-pedidos. A aplicação possui API em PHP, interface em React e ambiente completo
-com Docker.
+Este projeto foi desenvolvido como evolução da entrega do teste técnico
+fullstack. A aplicação contém uma API de pedidos em PHP, um frontend em React e
+ambientes Docker para desenvolvimento e produção.
 
-## Estado atual
+## Escopo entregue
 
-Até agora, deixei a API e a primeira versão funcional do frontend prontas:
+A entrega inclui a API, o frontend, a refatoração do código legado e a
+configuração de produção:
 
 - API executando com PHP e Apache;
 - MySQL isolado na rede do Docker;
@@ -540,31 +541,31 @@ docker compose down -v
 
 ## Decisões do projeto
 
-Escolhi desenvolver a API em PHP puro, sem Laravel ou Symfony. Vou separar o
-código em controllers, services, repositories e entities, com autoload PSR-4
+Escolhi desenvolver a API em PHP puro, sem Laravel ou Symfony. O código está
+separado em controllers, services, repositories e entities, com autoload PSR-4
 pelo Composer.
 
-Vou acessar o MySQL com PDO e prepared statements.
+O acesso ao MySQL utiliza PDO e prepared statements.
 
 As mudanças estruturais do banco são aplicadas por migrations versionadas. O
 runner executa os arquivos em ordem e registra cada versão concluída na tabela
 `schema_migrations`.
 
-As senhas serão armazenadas com hash irreversível utilizando `password_hash()`
-e verificadas com `password_verify()`. Senhas não serão criptografadas de forma
+As senhas são armazenadas com hash irreversível utilizando `password_hash()` e
+verificadas com `password_verify()`. Senhas não são criptografadas de forma
 reversível.
 
 Para os dados pessoais que realmente precisarem de criptografia reversível,
 implementei um serviço com Libsodium e XChaCha20-Poly1305. A chave fica somente
-nas variáveis de ambiente e nunca será armazenada no banco ou enviada ao
+nas variáveis de ambiente e não é armazenada no banco nem enviada ao
 repositório.
 
-Campos criptografados que precisarem de busca, como o e-mail, terão um hash de
+Campos criptografados que precisam de busca, como o e-mail, usam um hash de
 consulta separado, gerado com HMAC-SHA256 e uma chave exclusiva. Isso permite
 validar a unicidade e localizar registros sem pesquisar pelo texto original ou
 pela criptografia aleatória.
 
-Essa criptografia será uma das medidas de segurança do projeto, junto com
+Essa criptografia integra as medidas de segurança do projeto, junto com
 controle de acesso por perfil, exclusão lógica de usuários e logs sem
 informações sensíveis.
 
@@ -597,10 +598,10 @@ com contextos separados. A API descriptografa esses campos somente ao montar a
 resposta autorizada. Para impedir clientes ativos com o mesmo telefone, a API
 normaliza o número e grava separadamente um HMAC protegido por chave, com índice
 único no MySQL. O hash é removido na exclusão lógica, permitindo reutilizar o
-telefone em um cadastro futuro. Como a criptografia gera um nonce aleatório,
-a busca textual não usa os campos cifrados: a tela carrega os clientes
-autorizados e filtra nome e telefone em memória. Para um volume elevado, esse
-fluxo deverá migrar para paginação e filtros no backend.
+telefone em um novo cadastro posterior. Como a criptografia gera um nonce
+aleatório, a busca textual não usa os campos cifrados: a tela carrega os clientes
+autorizados e filtra nome e telefone em memória. Esse fluxo não é indicado para
+volumes elevados, que exigem paginação e filtros no backend.
 
 Somente `ADMIN` acessa a tela de manutenção de clientes e as rotas POST, PUT e
 DELETE. O `OPERADOR` pode executar GET `/clientes`, pois o formulário de pedido
@@ -695,24 +696,18 @@ cada rota administrativa.
 As listas de acessos, clientes e pedidos possuem busca instantânea e paginação
 de dez registros. A API devolve os registros autorizados e o frontend filtra
 os dados já descriptografados em memória, sem realizar uma nova consulta a cada
-tecla. Por isso, essa busca não utiliza os índices do MySQL. Uma futura
-paginação no servidor será necessária caso o volume de registros cresça
-significativamente.
+tecla. Por isso, essa busca não utiliza os índices do MySQL e não é indicada
+para volumes elevados, cenário em que filtros e paginação devem ficar no
+servidor.
 
 ## Limitações atuais
 
-A aplicação atende aos fluxos principais do teste, mas ainda possui limitações:
+A aplicação atende aos fluxos principais do teste, com estas limitações:
 
 - estão expostas as rotas técnicas, de autenticação, o cadastro administrativo
   completo de usuários, o cadastro de clientes e as quatro rotas obrigatórias
   de pedidos;
 - o relatório atual consolida a busca local da lista de pedidos e gera o PDF no
   navegador, sem filtros por período ou agregações no servidor;
-- a busca e a paginação atuais são locais e ainda não foram movidas para o
-  servidor, o que seria necessário para volumes elevados de registros.
-
-## Próximas etapas
-
-As três partes obrigatórias do teste estão implementadas. Como melhorias
-futuras, vou adicionar produtos e itens do pedido e mover a busca e a paginação
-para o servidor quando o volume de registros justificar essa mudança.
+- a busca e a paginação são locais e, por isso, não são adequadas para volumes
+  elevados de registros.
