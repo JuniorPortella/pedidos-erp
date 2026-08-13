@@ -113,13 +113,14 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost/healthz"
+          "http://127.0.0.1/healthz"
         ]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 10s
     networks:
+      - public
       - internal
     mem_limit: 128m
     logging: *default-logging
@@ -128,6 +129,8 @@ volumes:
   mysql-data:
 
 networks:
+  public:
+    driver: bridge
   internal:
     driver: bridge
     internal: true
