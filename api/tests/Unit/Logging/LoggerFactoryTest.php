@@ -138,6 +138,48 @@ final class LoggerFactoryTest extends TestCase
         );
     }
 
+    public function testOmitsStackTraceWhenDebugIsDisabled(): void
+    {
+        putenv('APP_DEBUG=false');
+
+        $logger = LoggerFactory::create(
+            $this->logFile
+        );
+
+        $logger->error(
+            'Falha controlada.',
+            ['exception' => $this->capturedException()]
+        );
+
+        $record = $this->firstRecord();
+
+        self::assertArrayNotHasKey(
+            'trace',
+            $record['context']['exception']
+        );
+    }
+
+    public function testIncludesStackTraceWhenDebugIsEnabled(): void
+    {
+        putenv('APP_DEBUG=true');
+
+        $logger = LoggerFactory::create(
+            $this->logFile
+        );
+
+        $logger->error(
+            'Falha controlada.',
+            ['exception' => $this->capturedException()]
+        );
+
+        $record = $this->firstRecord();
+
+        self::assertArrayHasKey(
+            'trace',
+            $record['context']['exception']
+        );
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -156,5 +198,16 @@ final class LoggerFactoryTest extends TestCase
             512,
             JSON_THROW_ON_ERROR
         );
+    }
+
+    private function capturedException(): RuntimeException
+    {
+        try {
+            throw new RuntimeException(
+                'Erro usado somente no teste.'
+            );
+        } catch (RuntimeException $exception) {
+            return $exception;
+        }
     }
 }

@@ -22,9 +22,11 @@ final class LoggerFactory
     public static function create(
         string $stream = 'php://stderr'
     ): LoggerInterface {
-        $minimumLevel = Environment::getBoolean(
+        $debugEnabled = Environment::getBoolean(
             'APP_DEBUG'
-        )
+        );
+
+        $minimumLevel = $debugEnabled
             ? Level::Debug
             : Level::Info;
 
@@ -32,7 +34,7 @@ final class LoggerFactory
             batchMode: JsonFormatter::BATCH_MODE_JSON,
             appendNewline: true,
             ignoreEmptyContextAndExtra: false,
-            includeStacktraces: true
+            includeStacktraces: $debugEnabled
         );
 
         $handler = new StreamHandler(

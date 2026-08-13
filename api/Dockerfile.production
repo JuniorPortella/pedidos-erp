@@ -1,0 +1,59 @@
+FROM composer:2.10 AS vendor
+
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --no-progress \
+    --no-scripts \
+    --no-autoloader \
+    --ignore-platform-req=ext-pdo_mysql
+
+COPY src ./src
+
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload \
+    --no-dev \
+    --classmap-authoritative \
+    --no-interaction \
+    --ignore-platform-req=ext-pdo_mysql
+
+FROM php:8.2-apache-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libonig-dev \
+        libxml2-dev \
+    && docker-php-ext-install \
+        dom \
+        mbstring \
+        pdo_mysql \
+        xml \
+        xmlwriter \
+    && a2enmod headers remoteip rewrite \
+    && printf 'ServerName pedidos-erp-api\n' \
+        > /etc/apache2/conf-available/servername.conf \
+    && a2enconf servername \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/apache/production.conf \
+    /etc/apache2/sites-available/000-default.conf
+COPY docker/php/production.ini \
+    /usr/local/etc/php/conf.d/production.ini
+
+WORKDIR /var/www/html
+
+COPY --from=vendor /app/vendor ./vendor
+COPY bootstrap ./bootstrap
+COPY bin ./bin
+COPY database ./database
+COPY public ./public
+COPY routes ./routes
+COPY src ./src
+
+EXPOSE 80
+
+CMD ["apache2-foreground"]
