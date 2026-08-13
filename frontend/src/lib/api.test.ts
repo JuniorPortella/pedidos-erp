@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, jsonBody } from './api';
+import { subscribeToSessionInvalidation } from './session';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -70,6 +71,8 @@ describe('apiRequest', () => {
   });
 
   it('nao tenta refresh para credenciais de login invalidas', async () => {
+    const sessionListener = vi.fn();
+    const unsubscribe = subscribeToSessionInvalidation(sessionListener);
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse({ error: 'Usuario ou senha invalidos.' }, 401));
@@ -86,6 +89,52 @@ describe('apiRequest', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionListener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('invalida a sessao quando o refresh falha', async () => {
+    const sessionListener = vi.fn();
+    const unsubscribe = subscribeToSessionInvalidation(sessionListener);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: 'Access token expirado.' }, 401),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ error: 'Refresh token invalido.' }, 401),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiRequest('/pedidos')).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(sessionListener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it('invalida a sessao quando a repeticao continua sem autorizacao', async () => {
+    const sessionListener = vi.fn();
+    const unsubscribe = subscribeToSessionInvalidation(sessionListener);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: 'Access token expirado.' }, 401),
+      )
+      .mockResolvedValueOnce(jsonResponse({ user: {} }))
+      .mockResolvedValueOnce(
+        jsonResponse({ error: 'Usuario inativo.' }, 401),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiRequest('/pedidos')).rejects.toMatchObject({
+      status: 401,
+      message: 'Usuario inativo.',
+    });
+
+    expect(sessionListener).toHaveBeenCalledTimes(1);
+    unsubscribe();
   });
 
   it('preserva os erros de validacao retornados pela API', async () => {

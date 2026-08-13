@@ -66,6 +66,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - testes unitários e de integração configurados com PHPUnit;
 - frontend React executando com Vite e Material UI;
 - login conectado à API por cookies, CSRF e renovação automática da sessão;
+- logout e expiração da sessão sincronizados entre abas do navegador;
 - rotas protegidas e menu condicionado aos perfis `ADMIN` e `OPERADOR`;
 - layout ERP responsivo inspirado na navegação lateral do AgraTeste;
 - tela inicial e páginas unificadas para acessos, clientes e pedidos;

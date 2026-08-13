@@ -1,4 +1,5 @@
 import type { ErrorResponse, ValidationFields } from '../types/api';
+import { invalidateSession } from './session';
 
 const API_URL = (
   import.meta.env.VITE_API_URL ?? 'http://localhost:18081'
@@ -126,8 +127,13 @@ export async function apiRequest<T>(
       await refreshSession();
       response = await send(path, requestOptions);
     } catch {
+      invalidateSession();
       throw await errorFrom(response);
     }
+  }
+
+  if (response.status === 401 && !authenticationPaths.has(path)) {
+    invalidateSession();
   }
 
   if (!response.ok) {

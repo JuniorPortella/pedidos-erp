@@ -8,6 +8,10 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { ApiError, apiRequest, jsonBody } from '../lib/api';
+import {
+  invalidateSession,
+  subscribeToSessionInvalidation,
+} from '../lib/session';
 import type { AuthUser } from '../types/api';
 
 interface UserResponse {
@@ -51,6 +55,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void restoreSession();
   }, [restoreSession]);
 
+  useEffect(() => subscribeToSessionInvalidation(() => {
+    setUser(null);
+    setLoading(false);
+    setSessionError(null);
+  }), []);
+
   const login = useCallback(async (username: string, password: string) => {
     const response = await apiRequest<UserResponse>('/auth/login', {
       method: 'POST',
@@ -70,6 +80,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       });
     } finally {
       setUser(null);
+      invalidateSession();
     }
   }, []);
 
