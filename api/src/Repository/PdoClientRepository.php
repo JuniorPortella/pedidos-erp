@@ -6,6 +6,8 @@ namespace App\Repository;
 
 use App\Entity\Client;
 use App\Security\DataCipher;
+use App\Security\LookupHasher;
+use App\Service\PhoneNormalizer;
 use DateTimeImmutable;
 use PDO;
 use RuntimeException;
@@ -17,7 +19,8 @@ final readonly class PdoClientRepository implements ClientRepository
 
     public function __construct(
         private PDO $connection,
-        private DataCipher $cipher
+        private DataCipher $cipher,
+        private LookupHasher $lookupHasher
     ) {
     }
 
@@ -27,10 +30,12 @@ final readonly class PdoClientRepository implements ClientRepository
             <<<'SQL'
             INSERT INTO clientes (
                 nome_criptografado,
-                telefone_criptografado
+                telefone_criptografado,
+                telefone_hash
             ) VALUES (
                 :name,
-                :phone
+                :phone,
+                :phone_hash
             )
             SQL
         );
@@ -44,6 +49,7 @@ final readonly class PdoClientRepository implements ClientRepository
                 $phone,
                 self::PHONE_CONTEXT
             ),
+            'phone_hash' => $this->phoneHash($phone),
         ]);
 
         $client = $this->findById(
@@ -70,6 +76,7 @@ final readonly class PdoClientRepository implements ClientRepository
             SET
                 nome_criptografado = :name,
                 telefone_criptografado = :phone,
+                telefone_hash = :phone_hash,
                 updated_at = UTC_TIMESTAMP()
             WHERE id = :id
               AND deleted_at IS NULL
@@ -86,6 +93,7 @@ final readonly class PdoClientRepository implements ClientRepository
                 $phone,
                 self::PHONE_CONTEXT
             ),
+            'phone_hash' => $this->phoneHash($phone),
         ]);
 
         return $this->findById($id);
@@ -97,6 +105,7 @@ final readonly class PdoClientRepository implements ClientRepository
             <<<'SQL'
             UPDATE clientes
             SET
+                telefone_hash = NULL,
                 deleted_at = UTC_TIMESTAMP(),
                 updated_at = UTC_TIMESTAMP()
             WHERE id = :id
@@ -154,6 +163,41 @@ final readonly class PdoClientRepository implements ClientRepository
         );
     }
 
+    public function phoneExists(
+        string $phone,
+        ?int $exceptClientId = null
+    ): bool {
+        $sql = $exceptClientId === null
+            ? <<<'SQL'
+              SELECT 1
+              FROM clientes
+              WHERE telefone_hash = :phone_hash
+                AND deleted_at IS NULL
+              LIMIT 1
+              SQL
+            : <<<'SQL'
+              SELECT 1
+              FROM clientes
+              WHERE telefone_hash = :phone_hash
+                AND id <> :except_client_id
+                AND deleted_at IS NULL
+              LIMIT 1
+              SQL;
+
+        $parameters = [
+            'phone_hash' => $this->phoneHash($phone),
+        ];
+
+        if ($exceptClientId !== null) {
+            $parameters['except_client_id'] = $exceptClientId;
+        }
+
+        $statement = $this->connection->prepare($sql);
+        $statement->execute($parameters);
+
+        return $statement->fetchColumn() !== false;
+    }
+
     /**
      * @param array<string, mixed> $row
      */
@@ -175,6 +219,14 @@ final readonly class PdoClientRepository implements ClientRepository
             updatedAt: new DateTimeImmutable(
                 (string) $row['updated_at']
             )
+        );
+    }
+
+    private function phoneHash(string $phone): string
+    {
+        return $this->lookupHasher->hash(
+            PhoneNormalizer::normalize($phone),
+            self::PHONE_CONTEXT
         );
     }
 }

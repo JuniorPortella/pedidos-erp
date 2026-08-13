@@ -127,7 +127,8 @@ $clientRepository = new PdoClientRepository(
         Environment::getRequired(
             'DATA_ENCRYPTION_KEY'
         )
-    )
+    ),
+    $lookupHasher
 );
 
 $clientController = new ClientController(

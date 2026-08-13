@@ -8,7 +8,9 @@ use App\Config\Environment;
 use App\Database\ConnectionFactory;
 use App\Repository\PdoClientRepository;
 use App\Security\DataCipher;
+use App\Security\LookupHasher;
 use PDO;
+use PDOException;
 use PHPUnit\Framework\TestCase;
 
 final class PdoClientRepositoryTest extends TestCase
@@ -25,6 +27,9 @@ final class PdoClientRepositoryTest extends TestCase
             $this->connection,
             new DataCipher(
                 Environment::getRequired('DATA_ENCRYPTION_KEY')
+            ),
+            new LookupHasher(
+                Environment::getRequired('DATA_LOOKUP_KEY')
             )
         );
     }
@@ -49,7 +54,10 @@ final class PdoClientRepositoryTest extends TestCase
 
         $statement = $this->connection->prepare(
             <<<'SQL'
-            SELECT nome_criptografado, telefone_criptografado
+            SELECT
+                nome_criptografado,
+                telefone_criptografado,
+                telefone_hash
             FROM clientes
             WHERE id = :id
             SQL
@@ -60,6 +68,17 @@ final class PdoClientRepositoryTest extends TestCase
         self::assertIsArray($row);
         self::assertNotSame($name, $row['nome_criptografado']);
         self::assertNotSame($phone, $row['telefone_criptografado']);
+        self::assertNotSame($phone, $row['telefone_hash']);
+        self::assertSame(64, strlen((string) $row['telefone_hash']));
+        self::assertTrue(
+            $this->clients->phoneExists('11999999999')
+        );
+        self::assertFalse(
+            $this->clients->phoneExists(
+                '11999999999',
+                $client->id
+            )
+        );
         self::assertSame(
             $client->id,
             $this->clients->findById($client->id)?->id
@@ -90,6 +109,9 @@ final class PdoClientRepositoryTest extends TestCase
         self::assertSame('Cliente Atualizado', $updated?->name);
         self::assertTrue($this->clients->softDelete($client->id));
         self::assertNull($this->clients->findById($client->id));
+        self::assertFalse(
+            $this->clients->phoneExists('11888888888')
+        );
         self::assertFalse($this->clients->softDelete($client->id));
     }
 
@@ -102,6 +124,41 @@ final class PdoClientRepositoryTest extends TestCase
                 'Cliente',
                 '11999999999'
             )
+        );
+    }
+
+    public function testDatabaseRejectsDuplicatedActivePhone(): void
+    {
+        $this->clients->create(
+            'Primeiro Cliente',
+            '+55 (11) 99999-9999'
+        );
+
+        $this->expectException(PDOException::class);
+
+        $this->clients->create(
+            'Segundo Cliente',
+            '11999999999'
+        );
+    }
+
+    public function testAllowsReusingPhoneAfterSoftDelete(): void
+    {
+        $client = $this->clients->create(
+            'Cliente Excluido',
+            '11999999999'
+        );
+
+        self::assertTrue($this->clients->softDelete($client->id));
+
+        $replacement = $this->clients->create(
+            'Cliente Substituto',
+            '+55 (11) 99999-9999'
+        );
+
+        self::assertSame(
+            'Cliente Substituto',
+            $replacement->name
         );
     }
 }

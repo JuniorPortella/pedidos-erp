@@ -6,6 +6,7 @@ namespace Tests\Support;
 
 use App\Entity\Client;
 use App\Repository\ClientRepository;
+use App\Service\PhoneNormalizer;
 use DateTimeImmutable;
 
 final class InMemoryClientRepository implements ClientRepository
@@ -87,5 +88,24 @@ final class InMemoryClientRepository implements ClientRepository
     public function findAll(): array
     {
         return array_reverse($this->clients);
+    }
+
+    public function phoneExists(
+        string $phone,
+        ?int $exceptClientId = null
+    ): bool {
+        $normalizedPhone = PhoneNormalizer::normalize($phone);
+
+        foreach ($this->clients as $client) {
+            if (
+                $client->id !== $exceptClientId
+                && PhoneNormalizer::normalize($client->phone)
+                    === $normalizedPhone
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

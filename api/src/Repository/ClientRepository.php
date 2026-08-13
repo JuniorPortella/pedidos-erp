@@ -20,6 +20,11 @@ interface ClientRepository
 
     public function findById(int $id): ?Client;
 
+    public function phoneExists(
+        string $phone,
+        ?int $exceptClientId = null
+    ): bool;
+
     /**
      * @return list<Client>
      */

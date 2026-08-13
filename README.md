@@ -53,6 +53,7 @@ Até agora, deixei a API e a primeira versão funcional do frontend prontas:
 - criação, atualização e exclusão lógica de clientes restritas ao perfil `ADMIN`;
 - listagem de clientes disponível para `ADMIN` e `OPERADOR` autenticados;
 - nome e telefone dos clientes criptografados no banco;
+- telefone único entre clientes ativos por meio de hash de consulta protegido;
 - criação, listagem, consulta e atualização de pedidos;
 - relacionamento entre pedidos e clientes por chave estrangeira `cliente_id`;
 - acesso aos pedidos permitido para usuários `ADMIN` e `OPERADOR` autenticados;
@@ -432,9 +433,9 @@ valida a criação administrativa de usuário, política de senha, proteção CS
 duplicidade de e-mail e usuário. Também valida atualização, troca de senha,
 exclusão lógica, revogação da sessão e proteção da própria conta do
 administrador. Para clientes, confirma que o `OPERADOR` pode listar, mas não
-pode criar, alterar ou excluir; também testa CSRF, validação, CRUD por `ADMIN`
-e confirma diretamente no MySQL que nome e telefone não foram armazenados em
-texto puro. Para pedidos, testa o relacionamento por `cliente_id`,
+pode criar, alterar ou excluir; também testa CSRF, validação, telefone único,
+CRUD por `ADMIN` e confirma diretamente no MySQL que nome e telefone não foram
+armazenados em texto puro. Para pedidos, testa o relacionamento por `cliente_id`,
 autenticação, CSRF, validação, criação por `OPERADOR`, listagem, detalhe,
 atualização, resposta `404` e a ausência do endpoint `DELETE`. Os registros
 temporários, clientes, pedidos e tokens são removidos ao final da execução.
@@ -592,11 +593,13 @@ adicional de relatório: são usados os mesmos dados de `GET /pedidos` e `GET
 
 No cadastro de clientes, nome e telefone também usam criptografia autenticada
 com contextos separados. A API descriptografa esses campos somente ao montar a
-resposta autorizada. Como a criptografia gera um nonce aleatório, não criei
-índices de busca sobre os textos cifrados: a tela carrega os clientes
+resposta autorizada. Para impedir clientes ativos com o mesmo telefone, a API
+normaliza o número e grava separadamente um HMAC protegido por chave, com índice
+único no MySQL. O hash é removido na exclusão lógica, permitindo reutilizar o
+telefone em um cadastro futuro. Como a criptografia gera um nonce aleatório,
+a busca textual não usa os campos cifrados: a tela carrega os clientes
 autorizados e filtra nome e telefone em memória. Para um volume elevado, esse
-fluxo deverá migrar para paginação no backend e um índice de consulta protegido
-definido conforme a regra de busca necessária.
+fluxo deverá migrar para paginação e filtros no backend.
 
 Somente `ADMIN` acessa a tela de manutenção de clientes e as rotas POST, PUT e
 DELETE. O `OPERADOR` pode executar GET `/clientes`, pois o formulário de pedido

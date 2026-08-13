@@ -62,7 +62,10 @@ final class PdoOrderRepositoryTest extends TestCase
 
         $clients = new PdoClientRepository(
             $this->connection,
-            $this->cipher
+            $this->cipher,
+            new LookupHasher(
+                Environment::getRequired('DATA_LOOKUP_KEY')
+            )
         );
         $this->clientId = $clients->create(
             'Cliente Protegido',

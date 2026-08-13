@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Dto\ClientInput;
 use App\Entity\Client;
 use App\Exception\ClientNotFoundException;
+use App\Exception\ValidationException;
 use App\Repository\ClientRepository;
 
 final readonly class ClientService
@@ -18,6 +19,8 @@ final readonly class ClientService
 
     public function create(ClientInput $input): Client
     {
+        $this->ensurePhoneIsAvailable($input->phone);
+
         return $this->repository->create(
             $input->name,
             $input->phone
@@ -40,6 +43,8 @@ final readonly class ClientService
             );
         }
 
+        $this->ensurePhoneIsAvailable($input->phone, $id);
+
         $client = $this->repository->update(
             $id,
             $input->name,
@@ -61,6 +66,22 @@ final readonly class ClientService
             throw new ClientNotFoundException(
                 'Cliente nao encontrado.'
             );
+        }
+    }
+
+    private function ensurePhoneIsAvailable(
+        string $phone,
+        ?int $exceptClientId = null
+    ): void {
+        if (
+            $this->repository->phoneExists(
+                $phone,
+                $exceptClientId
+            )
+        ) {
+            throw new ValidationException([
+                'telefone' => 'Este telefone ja esta cadastrado.',
+            ]);
         }
     }
 }

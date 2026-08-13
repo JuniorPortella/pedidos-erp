@@ -698,7 +698,8 @@ function verifyHttpAuthorization(
             $connection,
             new DataCipher(
                 Environment::getRequired('DATA_ENCRYPTION_KEY')
-            )
+            ),
+            $lookupHasher
         );
         $orderClient = $clientRepository->create(
             'Cliente do Pedido ' . $suffix,
@@ -1050,11 +1051,33 @@ function verifyHttpAuthorization(
         );
         $clientIds[] = $clientId;
 
+        [$duplicateClientStatus, $duplicateClientBody] = requestJson(
+            $baseUrl . '/clientes',
+            'POST',
+            [
+                cookieHeader($adminCookies),
+                'X-CSRF-Token: ' . $adminCookies['csrf_token'],
+            ],
+            [
+                'nome' => 'Cliente Smoke Duplicado',
+                'telefone' => '+55 (11) 99999-1234',
+            ]
+        );
+
+        assertSmoke(
+            $duplicateClientStatus === 422
+                && isset(
+                    $duplicateClientBody['fields']['telefone']
+                ),
+            'Cliente com telefone duplicado deve responder HTTP 422.'
+        );
+
         $encryptedClientStatement = $connection->prepare(
             <<<'SQL'
             SELECT
                 nome_criptografado,
-                telefone_criptografado
+                telefone_criptografado,
+                telefone_hash
             FROM clientes
             WHERE id = :id
             SQL
@@ -1067,8 +1090,11 @@ function verifyHttpAuthorization(
                 && $encryptedClient['nome_criptografado']
                     !== $clientName
                 && $encryptedClient['telefone_criptografado']
-                    !== $clientPhone,
-            'Nome e telefone do cliente foram persistidos em texto puro.'
+                    !== $clientPhone
+                && strlen(
+                    (string) $encryptedClient['telefone_hash']
+                ) === 64,
+            'Dados protegidos do cliente foram persistidos incorretamente.'
         );
 
         [$updateClientStatus, $updateClientBody] = requestJson(
