@@ -79,6 +79,7 @@ final readonly class OrderController
             'id' => $order->id,
             'cliente_id' => $order->clientId,
             'descricao' => $order->description,
+            'valor_total' => $order->totalAmount,
             'status' => $order->status->value,
             'criado_por' => $order->createdBy,
             'created_at' => $order->createdAt->format(

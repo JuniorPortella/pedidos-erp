@@ -25,6 +25,7 @@ final readonly class PdoOrderRepository implements OrderRepository
     public function create(
         int $clientId,
         string $description,
+        string $totalAmount,
         OrderStatus $status,
         int $createdBy
     ): Order {
@@ -33,11 +34,13 @@ final readonly class PdoOrderRepository implements OrderRepository
             INSERT INTO pedidos (
                 cliente_id,
                 descricao_criptografada,
+                valor_total,
                 status,
                 criado_por
             ) VALUES (
                 :client_id,
                 :description,
+                :total_amount,
                 :status,
                 :created_by
             )
@@ -50,6 +53,7 @@ final readonly class PdoOrderRepository implements OrderRepository
                 $description,
                 self::DESCRIPTION_CONTEXT
             ),
+            'total_amount' => $totalAmount,
             'status' => $status->value,
             'created_by' => $createdBy,
         ]);
@@ -71,6 +75,7 @@ final readonly class PdoOrderRepository implements OrderRepository
         int $id,
         int $clientId,
         string $description,
+        string $totalAmount,
         OrderStatus $status
     ): ?Order {
         $statement = $this->connection->prepare(
@@ -79,6 +84,7 @@ final readonly class PdoOrderRepository implements OrderRepository
             SET
                 cliente_id = :client_id,
                 descricao_criptografada = :description,
+                valor_total = :total_amount,
                 status = :status,
                 updated_at = UTC_TIMESTAMP()
             WHERE id = :id
@@ -92,6 +98,7 @@ final readonly class PdoOrderRepository implements OrderRepository
                 $description,
                 self::DESCRIPTION_CONTEXT
             ),
+            'total_amount' => $totalAmount,
             'status' => $status->value,
         ]);
 
@@ -106,6 +113,7 @@ final readonly class PdoOrderRepository implements OrderRepository
                 id,
                 cliente_id,
                 descricao_criptografada,
+                valor_total,
                 status,
                 criado_por,
                 created_at,
@@ -133,6 +141,7 @@ final readonly class PdoOrderRepository implements OrderRepository
                 id,
                 cliente_id,
                 descricao_criptografada,
+                valor_total,
                 status,
                 criado_por,
                 created_at,
@@ -160,6 +169,7 @@ final readonly class PdoOrderRepository implements OrderRepository
                 (string) $row['descricao_criptografada'],
                 self::DESCRIPTION_CONTEXT
             ),
+            totalAmount: (string) $row['valor_total'],
             status: OrderStatus::from(
                 (string) $row['status']
             ),

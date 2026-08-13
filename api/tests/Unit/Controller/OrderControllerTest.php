@@ -48,6 +48,7 @@ final class OrderControllerTest extends TestCase
             $this->request([
                 'cliente_id' => $this->clientId,
                 'descricao' => 'Pedido Teste',
+                'valor_total' => '149.90',
                 'status' => 'PENDENTE',
             ]),
             $this->authenticatedUser(7)
@@ -65,6 +66,10 @@ final class OrderControllerTest extends TestCase
         self::assertArrayNotHasKey(
             'cliente_nome',
             $createdBody['order']
+        );
+        self::assertSame(
+            '149.90',
+            $createdBody['order']['valor_total']
         );
         self::assertSame(7, $createdBody['order']['criado_por']);
 
@@ -91,6 +96,7 @@ final class OrderControllerTest extends TestCase
         $order = $this->repository->create(
             $this->clientId,
             'Descricao',
+            '10.00',
             OrderStatus::Pending,
             7
         );
@@ -99,6 +105,7 @@ final class OrderControllerTest extends TestCase
             $this->request([
                 'cliente_id' => $this->clientId,
                 'descricao' => 'Descricao Atualizada',
+                'valor_total' => '25.50',
                 'status' => 'CONCLUIDO',
             ], 'PUT'),
             (string) $order->id
@@ -113,6 +120,7 @@ final class OrderControllerTest extends TestCase
             $body['order']['status']
         );
         self::assertSame(7, $body['order']['criado_por']);
+        self::assertSame('25.50', $body['order']['valor_total']);
     }
 
     public function testRejectsInvalidOrderId(): void

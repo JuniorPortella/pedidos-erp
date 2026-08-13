@@ -24,6 +24,10 @@ final readonly class OrderInputValidator
             'descricao'
         );
 
+        $totalAmount = $this->normalizeMoney(
+            $data['valor_total'] ?? null
+        );
+
         $statusValue = strtoupper(
             $this->readTrimmedString($data, 'status')
         );
@@ -46,6 +50,11 @@ final readonly class OrderInputValidator
                 'A descricao deve possuir no maximo 5000 caracteres.';
         }
 
+        if ($totalAmount === null) {
+            $errors['valor_total'] =
+                'Informe um valor maior que zero com no maximo duas casas decimais.';
+        }
+
         if ($status === null) {
             $errors['status'] =
                 'O status deve ser PENDENTE, EM_PROCESSAMENTO ou CONCLUIDO.';
@@ -58,8 +67,44 @@ final readonly class OrderInputValidator
         return new OrderInput(
             clientId: $clientId,
             description: $description,
+            totalAmount: $totalAmount,
             status: $status
         );
+    }
+
+    private function normalizeMoney(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            $value = (string) $value;
+        }
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        if (
+            preg_match(
+                '/\A(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?\z/',
+                $value
+            ) !== 1
+        ) {
+            return null;
+        }
+
+        [$integer, $decimal] = array_pad(
+            explode('.', $value, 2),
+            2,
+            ''
+        );
+        $decimal = str_pad($decimal, 2, '0');
+
+        if ($integer === '0' && $decimal === '00') {
+            return null;
+        }
+
+        return $integer . '.' . $decimal;
     }
 
     private function readPositiveInteger(mixed $value): ?int

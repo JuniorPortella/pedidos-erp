@@ -3,8 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, jsonBody } from '../lib/api';
-import type { Client, Order } from '../types/api';
+import { downloadSalesReport } from '../lib/salesReport';
+import type { AuthUser, Client, Order } from '../types/api';
 import { OrdersPage } from './OrdersPage';
+
+const { useAuthMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(),
+}));
 
 vi.mock('../lib/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../lib/api')>();
@@ -16,14 +21,33 @@ vi.mock('../lib/api', async (importOriginal) => {
   };
 });
 
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => useAuthMock(),
+}));
+
+vi.mock('../lib/salesReport', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../lib/salesReport')>(),
+  downloadSalesReport: vi.fn(),
+}));
+
 const apiRequestMock = vi.mocked(apiRequest);
 const jsonBodyMock = vi.mocked(jsonBody);
+const downloadSalesReportMock = vi.mocked(downloadSalesReport);
+
+const admin: AuthUser = {
+  id: 1,
+  nome: 'Vagner Admin',
+  email: 'admin@example.com',
+  usuario: 'vagner',
+  perfil: 'ADMIN',
+};
 
 function order(id: number): Order {
   return {
     id,
     cliente_id: id,
     descricao: `Descricao do pedido ${id}`,
+    valor_total: `${id * 10}.00`,
     status: id % 2 === 0 ? 'CONCLUIDO' : 'PENDENTE',
     criado_por: 1,
     created_at: '2026-08-12T12:00:00+00:00',
@@ -61,6 +85,89 @@ describe('OrdersPage', () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
     jsonBodyMock.mockClear();
+    downloadSalesReportMock.mockReset();
+    downloadSalesReportMock.mockResolvedValue(undefined);
+    useAuthMock.mockReturnValue({ user: admin });
+  });
+
+  it('mostra o PDF para administradores', async () => {
+    mockInitialData([order(1)], [client(1)]);
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Baixar PDF' }))
+      .toBeEnabled();
+  });
+
+  it('oculta o PDF para operadores', async () => {
+    useAuthMock.mockReturnValue({
+      user: { ...admin, perfil: 'OPERADOR' },
+    });
+    mockInitialData([order(1)], [client(1)]);
+
+    renderPage();
+
+    await screen.findByText('Cliente 1');
+    expect(screen.queryByRole('button', { name: 'Baixar PDF' }))
+      .not.toBeInTheDocument();
+  });
+
+  it('desabilita o PDF quando nao existem pedidos', async () => {
+    mockInitialData([], []);
+
+    renderPage();
+
+    await screen.findByText('Nenhum pedido cadastrado.');
+    expect(screen.getByRole('button', { name: 'Baixar PDF' })).toBeDisabled();
+  });
+
+  it('envia todos os resultados filtrados ao PDF', async () => {
+    const orders = Array.from({ length: 12 }, (_, index) => order(index + 1));
+    const clients = orders.map((item) => client(item.cliente_id));
+    mockInitialData(orders, clients);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('1-10 de 12');
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Buscar pedidos' }),
+      'Concluido',
+    );
+    await user.click(screen.getByRole('button', { name: 'Baixar PDF' }));
+
+    expect(downloadSalesReportMock).toHaveBeenCalledWith(
+      orders.filter((item) => item.status === 'CONCLUIDO'),
+      clients,
+    );
+  });
+
+  it('gera o PDF com todas as paginas da lista', async () => {
+    const orders = Array.from({ length: 11 }, (_, index) => order(index + 1));
+    const clients = orders.map((item) => client(item.cliente_id));
+    mockInitialData(orders, clients);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByText('1-10 de 11');
+    await user.click(screen.getByRole('button', { name: 'Baixar PDF' }));
+
+    expect(downloadSalesReportMock).toHaveBeenCalledWith(orders, clients);
+  });
+
+  it('apresenta erro quando nao consegue gerar o PDF', async () => {
+    mockInitialData([order(1)], [client(1)]);
+    downloadSalesReportMock.mockRejectedValueOnce(new Error('Falha no PDF'));
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Baixar PDF' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nao foi possivel gerar o PDF.',
+    );
   });
 
   it('filtra os pedidos no frontend sem diferenciar acentos', async () => {
@@ -182,6 +289,8 @@ describe('OrdersPage', () => {
       .toBeInTheDocument();
     expect(screen.getByText('Informe a descricao do pedido.'))
       .toBeInTheDocument();
+    expect(screen.getByText('Informe um valor maior que zero.'))
+      .toBeInTheDocument();
     expect(apiRequestMock).toHaveBeenCalledTimes(2);
   });
 
@@ -205,6 +314,7 @@ describe('OrdersPage', () => {
       name: /Cliente novo/,
     }));
     await user.type(screen.getByLabelText(/^Descricao/), 'Dois produtos');
+    await user.type(screen.getByLabelText(/^Valor total/), '149,90');
     await user.click(screen.getByRole('button', { name: 'Salvar pedido' }));
 
     await waitFor(() => {
@@ -213,6 +323,7 @@ describe('OrdersPage', () => {
         body: JSON.stringify({
           cliente_id: 1,
           descricao: 'Dois produtos',
+          valor_total: '149.90',
           status: 'PENDENTE',
         }),
       });
@@ -244,6 +355,7 @@ describe('OrdersPage', () => {
       name: /Cliente novo/,
     }));
     await user.type(screen.getByLabelText(/^Descricao/), 'Descricao');
+    await user.type(screen.getByLabelText(/^Valor total/), '10');
     await user.click(screen.getByRole('button', { name: 'Salvar pedido' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Dados invalidos.');
@@ -254,11 +366,13 @@ describe('OrdersPage', () => {
     const existingOrder = order(42);
     existingOrder.cliente_id = 1;
     existingOrder.descricao = 'Descricao existente';
+    existingOrder.valor_total = '100.00';
     existingOrder.status = 'EM_PROCESSAMENTO';
 
     const updatedOrder = {
       ...existingOrder,
       cliente_id: 2,
+      valor_total: '150.50',
     };
 
     apiRequestMock
@@ -280,6 +394,7 @@ describe('OrdersPage', () => {
 
     const customer = screen.getByLabelText(/^Cliente/);
     expect(screen.getByDisplayValue('Descricao existente')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('100,00')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Editar pedido #42' }))
       .toBeInTheDocument();
 
@@ -287,6 +402,8 @@ describe('OrdersPage', () => {
     await user.click(screen.getByRole('option', {
       name: /Cliente atualizado/,
     }));
+    await user.clear(screen.getByLabelText(/^Valor total/));
+    await user.type(screen.getByLabelText(/^Valor total/), '150,50');
     await user.click(screen.getByRole('button', { name: 'Salvar pedido' }));
 
     await waitFor(() => {
@@ -295,6 +412,7 @@ describe('OrdersPage', () => {
         body: JSON.stringify({
           cliente_id: 2,
           descricao: 'Descricao existente',
+          valor_total: '150.50',
           status: 'EM_PROCESSAMENTO',
         }),
       });

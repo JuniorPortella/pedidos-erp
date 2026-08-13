@@ -28,6 +28,7 @@ final readonly class OrderService
         return $this->repository->create(
             clientId: $input->clientId,
             description: $input->description,
+            totalAmount: $input->totalAmount,
             status: $input->status,
             createdBy: $createdBy
         );
@@ -65,6 +66,7 @@ final readonly class OrderService
             id: $id,
             clientId: $input->clientId,
             description: $input->description,
+            totalAmount: $input->totalAmount,
             status: $input->status
         );
 

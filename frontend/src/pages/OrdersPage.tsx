@@ -1,6 +1,7 @@
 import {
   Add,
   Close,
+  DownloadOutlined,
   EditOutlined,
   Refresh,
   SaveOutlined,
@@ -12,6 +13,7 @@ import {
   Chip,
   CircularProgress,
   IconButton,
+  InputAdornment,
   MenuItem,
   Paper,
   Stack,
@@ -36,7 +38,10 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { SearchField } from '../components/SearchField';
+import { useAuth } from '../contexts/AuthContext';
 import { ApiError, apiRequest, jsonBody } from '../lib/api';
+import { formatCurrency, normalizeMoneyInput } from '../lib/money';
+import { downloadSalesReport } from '../lib/salesReport';
 import { matchesSearch } from '../lib/search';
 import type {
   Client,
@@ -50,6 +55,7 @@ const ROWS_PER_PAGE = 10;
 interface OrderForm {
   cliente_id: string;
   descricao: string;
+  valor_total: string;
   status: OrderStatus;
 }
 
@@ -60,6 +66,7 @@ interface OrdersLocationState {
 const emptyForm: OrderForm = {
   cliente_id: '',
   descricao: '',
+  valor_total: '',
   status: 'PENDENTE',
 };
 
@@ -87,10 +94,12 @@ export function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const clientsById = useMemo(
     () => new Map(clients.map((client) => [client.id, client])),
@@ -104,6 +113,7 @@ export function OrdersPage() {
           order.id,
           clientsById.get(order.cliente_id)?.nome ?? '',
           order.descricao,
+          formatCurrency(order.valor_total),
           order.status,
           statusLabels[order.status],
         ]),
@@ -201,11 +211,25 @@ export function OrdersPage() {
     setPage(0);
   };
 
+  const downloadReport = async () => {
+    setError(null);
+    setGeneratingReport(true);
+
+    try {
+      await downloadSalesReport(filteredOrders, clients);
+    } catch {
+      setError('Nao foi possivel gerar o PDF.');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
   const openEdit = (order: Order) => {
     setEditingId(order.id);
     setForm({
       cliente_id: String(order.cliente_id),
       descricao: order.descricao,
+      valor_total: order.valor_total.replace('.', ','),
       status: order.status,
     });
     setFields({});
@@ -242,6 +266,12 @@ export function OrdersPage() {
       localErrors.descricao = 'Informe a descricao do pedido.';
     }
 
+    const totalAmount = normalizeMoneyInput(form.valor_total);
+
+    if (totalAmount === null) {
+      localErrors.valor_total = 'Informe um valor maior que zero.';
+    }
+
     if (Object.keys(localErrors).length > 0) {
       setFields(localErrors);
       return;
@@ -257,6 +287,7 @@ export function OrdersPage() {
           body: jsonBody({
             cliente_id: Number(form.cliente_id),
             descricao: form.descricao,
+            valor_total: totalAmount,
             status: form.status,
           }),
         },
@@ -303,6 +334,22 @@ export function OrdersPage() {
               value={search}
               onChange={updateSearch}
             />
+            {user?.perfil === 'ADMIN' && (
+              <Button
+                variant="outlined"
+                startIcon={<DownloadOutlined />}
+                onClick={() => void downloadReport()}
+                disabled={
+                  loading
+                  || clientsLoading
+                  || generatingReport
+                  || filteredOrders.length === 0
+                }
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {generatingReport ? 'Gerando...' : 'Baixar PDF'}
+              </Button>
+            )}
             <Button
               variant="contained"
               startIcon={<Add />}
@@ -394,6 +441,21 @@ export function OrdersPage() {
               </TextField>
 
               <TextField
+                label="Valor total"
+                value={form.valor_total}
+                onChange={(event) => update('valor_total', event.target.value)}
+                error={Boolean(fields.valor_total)}
+                helperText={fields.valor_total}
+                inputProps={{ inputMode: 'decimal', maxLength: 14 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">R$</InputAdornment>
+                  ),
+                }}
+                required
+              />
+
+              <TextField
                 select
                 label="Status"
                 value={form.status}
@@ -417,7 +479,7 @@ export function OrdersPage() {
                 required
                 multiline
                 minRows={4}
-                sx={{ gridColumn: { md: '1 / -1' } }}
+                sx={{ gridColumn: '1 / -1' }}
               />
             </Box>
 
@@ -474,6 +536,7 @@ export function OrdersPage() {
                   <TableCell width={90}>Codigo</TableCell>
                   <TableCell>Cliente</TableCell>
                   <TableCell>Descricao</TableCell>
+                  <TableCell width={150} align="right">Valor</TableCell>
                   <TableCell width={180}>Status</TableCell>
                   <TableCell width={180}>Criado em</TableCell>
                   <TableCell width={72} align="center">Acoes</TableCell>
@@ -491,6 +554,9 @@ export function OrdersPage() {
                       <Typography noWrap variant="body2">
                         {order.descricao}
                       </Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      {formatCurrency(order.valor_total)}
                     </TableCell>
                     <TableCell>
                       <Chip

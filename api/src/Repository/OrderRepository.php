@@ -12,6 +12,7 @@ interface OrderRepository
     public function create(
         int $clientId,
         string $description,
+        string $totalAmount,
         OrderStatus $status,
         int $createdBy
     ): Order;
@@ -20,6 +21,7 @@ interface OrderRepository
         int $id,
         int $clientId,
         string $description,
+        string $totalAmount,
         OrderStatus $status
     ): ?Order;
 

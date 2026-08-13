@@ -23,6 +23,7 @@ export interface Order {
   id: number;
   cliente_id: number;
   descricao: string;
+  valor_total: string;
   status: OrderStatus;
   criado_por: number;
   created_at: string;

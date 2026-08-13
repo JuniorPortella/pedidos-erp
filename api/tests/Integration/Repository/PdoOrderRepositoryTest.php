@@ -91,6 +91,7 @@ final class PdoOrderRepositoryTest extends TestCase
         $order = $this->orders->create(
             $this->clientId,
             $description,
+            '249.90',
             OrderStatus::Pending,
             $this->userId
         );
@@ -98,13 +99,15 @@ final class PdoOrderRepositoryTest extends TestCase
         self::assertGreaterThan(0, $order->id);
         self::assertSame($this->clientId, $order->clientId);
         self::assertSame($description, $order->description);
+        self::assertSame('249.90', $order->totalAmount);
         self::assertSame($this->userId, $order->createdBy);
 
         $statement = $this->connection->prepare(
             <<<'SQL'
             SELECT
                 cliente_id,
-                descricao_criptografada
+                descricao_criptografada,
+                valor_total
             FROM pedidos
             WHERE id = :id
             SQL
@@ -115,6 +118,7 @@ final class PdoOrderRepositoryTest extends TestCase
 
         self::assertIsArray($row);
         self::assertSame($this->clientId, (int) $row['cliente_id']);
+        self::assertSame('249.90', $row['valor_total']);
         self::assertNotSame(
             $description,
             $row['descricao_criptografada']
@@ -129,6 +133,7 @@ final class PdoOrderRepositoryTest extends TestCase
         $order = $this->orders->create(
             $this->clientId,
             'Descricao Original',
+            '100.00',
             OrderStatus::Pending,
             $this->userId
         );
@@ -145,11 +150,13 @@ final class PdoOrderRepositoryTest extends TestCase
             $order->id,
             $this->clientId,
             'Descricao Atualizada',
+            '175.35',
             OrderStatus::Completed
         );
 
         self::assertNotNull($updated);
         self::assertSame($this->clientId, $updated->clientId);
+        self::assertSame('175.35', $updated->totalAmount);
         self::assertSame(
             OrderStatus::Completed,
             $updated->status
@@ -165,6 +172,7 @@ final class PdoOrderRepositoryTest extends TestCase
                 999999999,
                 $this->clientId,
                 'Descricao',
+                '10.00',
                 OrderStatus::Pending
             )
         );

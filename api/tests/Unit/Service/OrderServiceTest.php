@@ -40,6 +40,7 @@ final class OrderServiceTest extends TestCase
             new OrderInput(
                 $this->clientId,
                 'Descricao',
+                '125.90',
                 OrderStatus::Pending
             ),
             42
@@ -47,6 +48,7 @@ final class OrderServiceTest extends TestCase
 
         self::assertSame(1, $order->id);
         self::assertSame($this->clientId, $order->clientId);
+        self::assertSame('125.90', $order->totalAmount);
         self::assertSame(42, $order->createdBy);
         self::assertSame(
             OrderStatus::Pending,
@@ -60,6 +62,7 @@ final class OrderServiceTest extends TestCase
             new OrderInput(
                 $this->clientId,
                 'Descricao',
+                '50.00',
                 OrderStatus::Pending
             ),
             10
@@ -81,6 +84,7 @@ final class OrderServiceTest extends TestCase
             new OrderInput(
                 $this->clientId,
                 'Descricao',
+                '50.00',
                 OrderStatus::Pending
             ),
             10
@@ -91,11 +95,13 @@ final class OrderServiceTest extends TestCase
             new OrderInput(
                 $this->clientId,
                 'Descricao Atualizada',
+                '75.25',
                 OrderStatus::Completed
             )
         );
 
         self::assertSame($this->clientId, $updated->clientId);
+        self::assertSame('75.25', $updated->totalAmount);
         self::assertSame(
             OrderStatus::Completed,
             $updated->status
@@ -123,6 +129,7 @@ final class OrderServiceTest extends TestCase
             new OrderInput(
                 $this->clientId,
                 'Descricao',
+                '10.00',
                 OrderStatus::Pending
             )
         );
@@ -136,6 +143,7 @@ final class OrderServiceTest extends TestCase
             new OrderInput(
                 999,
                 'Descricao',
+                '10.00',
                 OrderStatus::Pending
             ),
             10

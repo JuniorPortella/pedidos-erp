@@ -20,6 +20,7 @@ final class InMemoryOrderRepository implements OrderRepository
     public function create(
         int $clientId,
         string $description,
+        string $totalAmount,
         OrderStatus $status,
         int $createdBy
     ): Order {
@@ -29,6 +30,7 @@ final class InMemoryOrderRepository implements OrderRepository
             id: $this->nextId++,
             clientId: $clientId,
             description: $description,
+            totalAmount: $totalAmount,
             status: $status,
             createdBy: $createdBy,
             createdAt: $now,
@@ -44,6 +46,7 @@ final class InMemoryOrderRepository implements OrderRepository
         int $id,
         int $clientId,
         string $description,
+        string $totalAmount,
         OrderStatus $status
     ): ?Order {
         foreach ($this->orders as $index => $order) {
@@ -55,6 +58,7 @@ final class InMemoryOrderRepository implements OrderRepository
                 id: $order->id,
                 clientId: $clientId,
                 description: $description,
+                totalAmount: $totalAmount,
                 status: $status,
                 createdBy: $order->createdBy,
                 createdAt: $order->createdAt,

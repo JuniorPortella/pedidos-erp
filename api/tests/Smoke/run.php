@@ -755,6 +755,7 @@ function verifyHttpAuthorization(
             [
                 'cliente_id' => $orderClient->id,
                 'descricao' => 'Pedido sem CSRF',
+                'valor_total' => '10.00',
                 'status' => 'PENDENTE',
             ]
         );
@@ -775,6 +776,7 @@ function verifyHttpAuthorization(
             [
                 'cliente_id' => 0,
                 'descricao' => '',
+                'valor_total' => '0',
                 'status' => 'CANCELADO',
             ]
         );
@@ -786,6 +788,7 @@ function verifyHttpAuthorization(
         assertSmoke(
             isset($invalidOrderBody['fields']['cliente_id'])
                 && isset($invalidOrderBody['fields']['descricao'])
+                && isset($invalidOrderBody['fields']['valor_total'])
                 && isset($invalidOrderBody['fields']['status']),
             'Pedido invalido deve identificar todos os campos.'
         );
@@ -801,6 +804,7 @@ function verifyHttpAuthorization(
             [
                 'cliente_id' => $orderClient->id,
                 'descricao' => 'Pedido criado pelo smoke test',
+                'valor_total' => '149.90',
                 'status' => 'PENDENTE',
             ]
         );
@@ -826,6 +830,11 @@ function verifyHttpAuthorization(
                 === $orderClient->id,
             'Pedido nao foi vinculado ao cliente selecionado.'
         );
+        assertSmoke(
+            ($createOrderBody['order']['valor_total'] ?? null)
+                === '149.90',
+            'Pedido nao retornou o valor total esperado.'
+        );
 
         [$showOrderStatus, $showOrderBody] = requestJson(
             $baseUrl . '/pedidos/' . $orderId,
@@ -846,6 +855,7 @@ function verifyHttpAuthorization(
             [
                 'cliente_id' => $orderClient->id,
                 'descricao' => 'Atualizacao sem CSRF',
+                'valor_total' => '175.00',
                 'status' => 'EM_PROCESSAMENTO',
             ]
         );
@@ -866,6 +876,7 @@ function verifyHttpAuthorization(
             [
                 'cliente_id' => $orderClient->id,
                 'descricao' => 'Pedido atualizado pelo smoke test',
+                'valor_total' => '199.50',
                 'status' => 'CONCLUIDO',
             ]
         );
@@ -873,7 +884,9 @@ function verifyHttpAuthorization(
         assertSmoke(
             $updateOrderStatus === 200
                 && ($updateOrderBody['order']['status'] ?? null)
-                    === 'CONCLUIDO',
+                    === 'CONCLUIDO'
+                && ($updateOrderBody['order']['valor_total'] ?? null)
+                    === '199.50',
             'PUT /pedidos/{id} nao atualizou o pedido.'
         );
 
@@ -1122,6 +1135,7 @@ function verifyHttpAuthorization(
             [
                 'cliente_id' => $orderClient->id,
                 'descricao' => 'CSRF de outra sessao',
+                'valor_total' => '10.00',
                 'status' => 'PENDENTE',
             ]
         );

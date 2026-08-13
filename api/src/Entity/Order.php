@@ -12,6 +12,7 @@ final readonly class Order
         public int $id,
         public int $clientId,
         public string $description,
+        public string $totalAmount,
         public OrderStatus $status,
         public int $createdBy,
         public DateTimeImmutable $createdAt,

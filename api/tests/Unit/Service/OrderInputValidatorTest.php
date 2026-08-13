@@ -26,6 +26,7 @@ final class OrderInputValidatorTest extends TestCase
         $input = $this->validator->validate([
             'cliente_id' => '42',
             'descricao' => '  Pedido completo  ',
+            'valor_total' => ' 149.9 ',
             'status' => '  em_processamento  ',
         ]);
 
@@ -37,6 +38,7 @@ final class OrderInputValidatorTest extends TestCase
             'Pedido completo',
             $input->description
         );
+        self::assertSame('149.90', $input->totalAmount);
         self::assertSame(
             OrderStatus::Processing,
             $input->status
@@ -51,6 +53,7 @@ final class OrderInputValidatorTest extends TestCase
         $input = $this->validator->validate([
             'cliente_id' => 1,
             'descricao' => 'Descricao',
+            'valor_total' => '10.00',
             'status' => $value,
         ]);
 
@@ -88,6 +91,7 @@ final class OrderInputValidatorTest extends TestCase
                 [
                     'cliente_id',
                     'descricao',
+                    'valor_total',
                     'status',
                 ],
                 array_keys($exception->errors())
@@ -101,6 +105,7 @@ final class OrderInputValidatorTest extends TestCase
             $this->validator->validate([
                 'cliente_id' => 1,
                 'descricao' => 'Descricao',
+                'valor_total' => '10.00',
                 'status' => 'CANCELADO',
             ]);
             self::fail('Era esperada uma ValidationException.');
@@ -118,6 +123,7 @@ final class OrderInputValidatorTest extends TestCase
             $this->validator->validate([
                 'cliente_id' => 1,
                 'descricao' => str_repeat('b', 5001),
+                'valor_total' => '10.00',
                 'status' => 'PENDENTE',
             ]);
             self::fail('Era esperada uma ValidationException.');
@@ -136,6 +142,7 @@ final class OrderInputValidatorTest extends TestCase
             $this->validator->validate([
                 'cliente_id' => $value,
                 'descricao' => 'Descricao',
+                'valor_total' => '10.00',
                 'status' => 'PENDENTE',
             ]);
             self::fail('Era esperada uma ValidationException.');
@@ -155,6 +162,39 @@ final class OrderInputValidatorTest extends TestCase
             'negative' => [-1],
             'decimal' => [1.5],
             'text' => ['cliente'],
+            'boolean' => [true],
+        ];
+    }
+
+    #[DataProvider('invalidAmounts')]
+    public function testRejectsInvalidTotalAmount(mixed $value): void
+    {
+        try {
+            $this->validator->validate([
+                'cliente_id' => 1,
+                'descricao' => 'Descricao',
+                'valor_total' => $value,
+                'status' => 'PENDENTE',
+            ]);
+            self::fail('Era esperada uma ValidationException.');
+        } catch (ValidationException $exception) {
+            self::assertArrayHasKey(
+                'valor_total',
+                $exception->errors()
+            );
+        }
+    }
+
+    public static function invalidAmounts(): array
+    {
+        return [
+            'missing' => [null],
+            'zero' => ['0'],
+            'negative' => ['-1.00'],
+            'three decimals' => ['10.999'],
+            'comma' => ['10,50'],
+            'over limit' => ['10000000000.00'],
+            'float' => [10.5],
             'boolean' => [true],
         ];
     }
